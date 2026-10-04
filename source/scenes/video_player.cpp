@@ -360,7 +360,7 @@ debug_info_view =
 		if (var_3d_mode) {
 			gfxSet3D(true);
 		} else {
-			gfxSetWide(true);
+			gfxSetWide(false);
 		}
 		misc_tasks_request(TASK_SAVE_SETTINGS);
 	}
@@ -1988,6 +1988,18 @@ debug_info_view =
 	    vid_zoom = std::min(10.0, std::max(0.05, vid_zoom));
 	    vid_x = (400 - (vid_width_org * vid_zoom)) / 2;
 	    vid_y = ((var_full_screen_mode ? 240 : 225) - (vid_height_org * vid_zoom)) / 2;
+	    {   // debug: log the geometry whenever it changes
+		    static int last_w = -1, last_h = -1, last_tw = -1, last_th = -1;
+		    int ti = !texture_index_head;
+		    if (last_w != vid_width_org || last_h != vid_height_org || last_tw != vid_tex_width[ti] || last_th != vid_tex_height[ti]) {
+			    last_w = vid_width_org; last_h = vid_height_org; last_tw = vid_tex_width[ti]; last_th = vid_tex_height[ti];
+			    logger.info("geom", "org=" + std::to_string(vid_width_org) + "x" + std::to_string(vid_height_org) +
+			                            " padded=" + std::to_string(vid_width) + "x" + std::to_string(vid_height) +
+			                            " tex=" + std::to_string(vid_tex_width[ti]) + "x" + std::to_string(vid_tex_height[ti]) +
+			                            " zoom=" + std::to_string(vid_zoom) + " x=" + std::to_string(vid_x) + " y=" + std::to_string(vid_y) +
+			                            " fullscreen=" + std::to_string((int)var_full_screen_mode));
+		    }
+	    }
 	    if (!var_full_screen_mode) {
 		    vid_y += 15;
 	    }

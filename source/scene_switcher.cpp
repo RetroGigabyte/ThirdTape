@@ -97,7 +97,7 @@ void Menu_init(void) {
 		threadFree(core_3);
 	}
 
-	LOG_IF_ERROR(Draw_init(var_model != CFG_MODEL_2DS).code);
+	LOG_IF_ERROR(Draw_init(false /* wide mode (800x240) off: all top-screen drawing assumes 400 px */).code);
 	Draw_frame_ready();
 	Draw_screen_ready(0, DEF_DRAW_BLACK); // Black prevents flashing.
 	Draw_screen_ready(1, DEF_DRAW_BLACK); // Same here
