@@ -1,4 +1,5 @@
 ﻿#include "headers.hpp"
+#include <sys/stat.h>
 
 void Logger::init() { osTickCounterStart(&stopwatch); }
 void Logger::log(LogLevel level, const std::string &str) {
@@ -15,7 +16,9 @@ void Logger::log(LogLevel level, const std::string &str) {
 	}
 	logs.push_back({acc_time, level, std::string(time_str) + " " + str.substr(0, 120)});
 	{ // debug aid: mirror the log to the SD card (flushed per line so it survives crashes)
-		static FILE *log_file = fopen("sdmc:/3ds/FourthTube/log.txt", "wb");
+		mkdir("sdmc:/3ds", 0777);
+		mkdir("sdmc:/3ds/ThirdTape", 0777);
+		static FILE *log_file = fopen("sdmc:/3ds/ThirdTape/log.txt", "wb");
 		static int lines_written = 0;
 		if (log_file && lines_written < 4000) {
 			lines_written++;

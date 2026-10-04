@@ -13,7 +13,7 @@ const std::function<u32(const View &)> View::STANDARD_BACKGROUND = [](const View
 		int g = (int)(0x00 + 0x2A * t);
 		return COLOR_GRAY(g);
 	}
-	// white -> light blue while the row is pressed
-	int r = (int)(0xFF + (0xC9 - 0xFF) * t), g = (int)(0xFF + (0xE4 - 0xFF) * t), b = (int)(0xFF + (0xF8 - 0xFF) * t);
+	// white -> light green while the row is pressed
+	int r = (int)(0xFF + (0xCF - 0xFF) * t), g = (int)(0xFF + (0xEE - 0xFF) * t), b = (int)(0xFF + (0xCF - 0xFF) * t);
 	return COLOR_RGB(r, g, b);
 };

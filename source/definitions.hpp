@@ -1,12 +1,12 @@
 #pragma once
 
 // settings
-#define DEF_MAIN_DIR (std::string) "/3ds/FourthTube/"
+#define DEF_MAIN_DIR (std::string) "/3ds/ThirdTape/" // own data (history, settings, subscriptions): never shared with FourthTube
 #define DEF_SWKBD_MAX_DIC_WORDS 128
 #define DEF_CHECK_INTERNET_URL (std::string) "https://connectivitycheck.gstatic.com/generate_204"
 #define DEF_CURRENT_APP_VER (std::string) "Beta 34.1"
 #define DEF_CURRENT_APP_VER_INT 0
-#define GITHUB_URL std::string("https://github.com/erievs/FourthTube")
+#define GITHUB_URL std::string("https://github.com/RetroGigabyte/ThirdTape")
 
 // video player
 #define DEF_SAPP0_NAME (std::string) "Video\nplayer"

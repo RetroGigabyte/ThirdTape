@@ -275,11 +275,11 @@ bool Menu_main(void) {
 	}
 
 	global_intent = Intent();
-	{ // debug aid: sdmc:/3ds/FourthTube/start_video.txt containing a video URL opens that video on the first frame
+	{ // debug aid: sdmc:/3ds/ThirdTape/start_video.txt containing a video URL opens that video on the first frame
 		static bool debug_start_done = false;
 		if (!debug_start_done) {
 			debug_start_done = true;
-			if (FILE *f = fopen("sdmc:/3ds/FourthTube/start_video.txt", "rb")) {
+			if (FILE *f = fopen("sdmc:/3ds/ThirdTape/start_video.txt", "rb")) {
 				char buf[512] = {0};
 				size_t n = fread(buf, 1, sizeof(buf) - 1, f);
 				fclose(f);

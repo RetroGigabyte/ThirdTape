@@ -13,11 +13,10 @@ bool thread_suspend = false;
 bool already_init = false;
 bool exiting = false;
 
-const std::vector<std::string> app_description_lines = {"A work-in-progress homebrew YouTube client", "for the 3DS"};
+const std::vector<std::string> app_description_lines = {"A homebrew Kamtape client", "for the 3DS"};
 const std::vector<std::string> story_lines = {
-    "ThirdTube stopped working",
-    "then we, as the former ThirdTube",
-    "now FourthTube community, took action.",
+    "ThirdTape is a Kamtape client based on",
+    "FourthTube, itself a fork of ThirdTube.",
 };
 
 const std::vector<std::pair<std::string, std::vector<std::string>>> credits = {
@@ -82,7 +81,7 @@ void About_init(void) {
 	                        ->set_font_size(MIDDLE_FONT_SIZE, MIDDLE_FONT_INTERVAL),
 	                    (new RuleView(0, 0, 320, SMALL_MARGIN * 2)),
 	                    (new TextView(0, 0, 320, MIDDLE_FONT_INTERVAL))
-	                        ->set_text("FourthTube")
+	                        ->set_text("ThirdTape")
 	                        ->set_x_alignment(TextView::XAlign::CENTER)
 	                        ->set_font_size(MIDDLE_FONT_SIZE, MIDDLE_FONT_INTERVAL),
 	                    (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))
