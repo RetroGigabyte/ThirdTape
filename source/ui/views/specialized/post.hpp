@@ -10,8 +10,10 @@
 #include "variables.hpp"
 #include "util/timestamp_parser.hpp"
 
-#define POST_ICON_SIZE 48
-#define REPLY_ICON_SIZE 32
+// Kamtape comments show neither profile pictures nor like counts: no icon column and no like row
+#define POST_ICON_SIZE 0
+#define REPLY_ICON_SIZE 0
+#define POST_FOOTER_HEIGHT (SMALL_MARGIN * 2) // space below a comment (used to be the like row)
 #define COMMUNITY_IMAGE_SIZE (var_community_image_size)
 
 // used for comments and community posts
@@ -150,7 +152,7 @@ struct PostView : public FixedWidthView {
 	float get_self_height() {
 		float height = std::max(left_height(), right_height());
 		if (!is_description_mode) {
-			height += 16 + SMALL_MARGIN * 2;
+			height += POST_FOOTER_HEIGHT;
 		}
 		return height;
 	}
@@ -164,7 +166,7 @@ struct PostView : public FixedWidthView {
 		}
 
 		float cur_y = std::max(left_height(), right_height());
-		cur_y += 16 + SMALL_MARGIN * 2;
+		cur_y += POST_FOOTER_HEIGHT;
 		if (replies_shown) {
 			cur_y += SMALL_MARGIN + DEFAULT_FONT_INTERVAL + SMALL_MARGIN; // hide replies
 		}
