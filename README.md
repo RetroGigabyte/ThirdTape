@@ -13,16 +13,16 @@ ThirdTape is an unofficial client and is not affiliated with Kamtape. It is base
 ## Features
 - **Home:** the videos featured on Kamtape's front page.
 - **Search:** Kamtape's search with paging ("load more" as you scroll).
-- **Video player:** streams Kamtape's MP4 files (`get_video?video_id=ID&webm=1`) with HTTP range requests, so playback starts before the whole file is downloaded and seeking works. Software decoding everywhere, plus the New 3DS hardware decoder inherited from FourthTube .
-- **Ratings:** Kamtape's 5-star rating with the number of ratings.
-- **Comments:** with their scores (Reddit-style up/down column) and replies. The first comments load immediately, the rest as you scroll. When logged in you can post comments and reply to comments.
+- **Video player:** streams Kamtape's MP4 files (`get_video?video_id=ID&webm=1`) with HTTP range requests, so playback starts before the whole file is downloaded and seeking works. Software decoding everywhere, plus the New 3DS hardware decoder inherited from FourthTube (confirmed in use on a New 3DS XL).
+- **Ratings:** Kamtape's 5-star rating with the number of ratings. When logged in, tap a star under the title to rate the video (hold and slide to preview).
+- **Comments:** with their scores (Reddit-style up/down column) and replies. The first comments load immediately, the rest as you scroll. When logged in you can post comments, reply to comments and vote comments up or down with the arrows next to the score.
 - **Channels:** profile picture, bio and profile fields, counters, the user's videos, their playlists, and the comments left on the channel (with the commenters' pictures and attached videos). Posting a comment on a channel (Kamtape asks for a captcha) is implemented but currently bugged, so the button is switched off.
 - **Subscriptions** and **watch history**. History is local to the app. When logged in, subscriptions are the account's: they are read from Kamtape at startup and after login, and subscribing/unsubscribing is sent to the account. (You can't subscribe to yourself.)
 - **Login** with your Kamtape username and password (Settings). Only the session cookie is saved to the SD card, never the password. The session is sent with every request to kamtape.com.
 - English only (like Kamtape).
 - A UI in the style of the 3DS System Settings, with a green accent.
 
-Known issue: posting on channels. Not supported yet: uploading, voting on comments and rating videos (login is in place, these are the next step), subtitles, live streams, shorts, community posts.
+Known issues: posting on channels. Rating videos and voting on comments are new and have not been confirmed against the live site on a real console yet. Not supported yet: uploading, favorites, subtitles, live streams, shorts, community posts.
 
 ## Controls and data
 Touch screen and buttons as in FourthTube (L/R switch tabs, B goes back). All of the app's data lives in `sdmc:/3ds/ThirdTape/` (watch history, subscriptions, settings, `log.txt`). It is separate from FourthTube's folder.
