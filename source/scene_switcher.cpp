@@ -275,6 +275,23 @@ bool Menu_main(void) {
 	}
 
 	global_intent = Intent();
+	{ // debug aid: sdmc:/3ds/FourthTube/start_video.txt containing a video URL opens that video on the first frame
+		static bool debug_start_done = false;
+		if (!debug_start_done) {
+			debug_start_done = true;
+			if (FILE *f = fopen("sdmc:/3ds/FourthTube/start_video.txt", "rb")) {
+				char buf[512] = {0};
+				size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+				fclose(f);
+				std::string url(buf, n);
+				while (!url.empty() && (url.back() == '\n' || url.back() == '\r' || url.back() == ' ')) url.pop_back();
+				if (!url.empty()) {
+					global_intent.next_scene = SceneType::VIDEO_PLAYER;
+					global_intent.arg = url;
+				}
+			}
+		}
+	}
 	if (global_current_scene == SceneType::VIDEO_PLAYER) {
 		VideoPlayer_draw();
 	} else if (global_current_scene == SceneType::SEARCH) {

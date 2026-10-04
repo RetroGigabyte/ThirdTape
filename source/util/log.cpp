@@ -14,6 +14,15 @@ void Logger::log(LogLevel level, const std::string &str) {
 		draw_offset_y++;
 	}
 	logs.push_back({acc_time, level, std::string(time_str) + " " + str.substr(0, 120)});
+	{ // debug aid: mirror the log to the SD card (flushed per line so it survives crashes)
+		static FILE *log_file = fopen("sdmc:/3ds/FourthTube/log.txt", "wb");
+		static int lines_written = 0;
+		if (log_file && lines_written < 4000) {
+			lines_written++;
+			fprintf(log_file, "%s\n", logs.back().str.c_str());
+			fflush(log_file);
+		}
+	}
 	if (logs.size() > MAX_BUFFERED_LINES) {
 		logs.pop_front(), draw_offset_y--;
 	}

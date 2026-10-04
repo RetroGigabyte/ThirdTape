@@ -2068,6 +2068,8 @@ debug_info_view =
 
 			    // video page parsing sometimes randomly fails, so try several times
 			    network_waiting_status = "Reading Stream";
+			    logger.info(DEF_SAPP0_DECODE_THREAD_STR, std::string("starting init: audio_only=") + (audio_only_mode ? "1" : "0") +
+			                                                  " q=" + std::to_string((int)video_p_value) + " url=" + playing_video_info.both_stream_url);
 			    if (audio_only_mode) {
 				    result = network_decoder.init(
 				        playing_video_info.audio_stream_url, stream_downloader,

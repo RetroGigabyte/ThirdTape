@@ -26,7 +26,48 @@ void NetworkMultipleDecoder::deinit() {
 		usleep(10000);
 	}
 }
+// Opening mvd:STD blocks forever when the service does not exist (emulators such as Azahar/Citra) or its module isn't
+// running. Probe it from a helper thread and give up after a few seconds; the result is cached.
+static volatile bool mvd_probe_done = false;
+static volatile Result mvd_probe_result = -1;
+static void mvd_probe_thread(void *) {
+	Handle h = 0;
+	Result r = srvGetServiceHandle(&h, "mvd:STD");
+	if (R_SUCCEEDED(r)) {
+		svcCloseHandle(h);
+	}
+	mvd_probe_result = r;
+	mvd_probe_done = true;
+}
+static bool mvd_service_answers() {
+	static int state = -1; // -1: unknown, 0: unavailable, 1: available
+	if (state >= 0) {
+		return state == 1;
+	}
+	Thread t = threadCreate(mvd_probe_thread, NULL, 16 * 1024, 0x30, -2, false);
+	if (!t) {
+		state = 0;
+		return false;
+	}
+	for (int i = 0; i < 400 && !mvd_probe_done; i++) {
+		svcSleepThread(10 * 1000 * 1000LL); // up to 4 s
+	}
+	if (!mvd_probe_done) {
+		logger.caution("dec/init", "mvd:STD never answered (emulator?), using software decoding");
+		state = 0;
+		return false; // the probe thread stays blocked; harmless
+	}
+	threadJoin(t, U64_MAX);
+	threadFree(t);
+	state = R_SUCCEEDED(mvd_probe_result) ? 1 : 0;
+	logger.info("dec/init", std::string("mvd:STD probe result ") + std::to_string((unsigned)mvd_probe_result));
+	return state == 1;
+}
+
 void NetworkMultipleDecoder::init_mvd() {
+	if (!mvd_inited && !mvd_service_answers()) {
+		return;
+	}
 	if (!mvd_inited) {
 		Result mvd_result = -1;
 		for (int mb = 15; mb >= 5; mb--) {
@@ -117,7 +158,9 @@ Result_with_string NetworkMultipleDecoder::init(std::string video_url, std::stri
 		streams = {both_stream};
 		downloader.add_stream(both_stream);
 		decoder.interrupt = false;
+		logger.info("net-dec", "opening combined stream with ffmpeg: " + both_url);
 		result = tmp_ffmpeg_data.init(both_stream, &decoder);
+		logger.info("net-dec", "ffmpeg open result: " + std::to_string(result.code) + " " + result.string + " " + result.error_description);
 
 		if (is_livestream) {
 			fragment_id = both_stream->seq_id;
@@ -130,7 +173,7 @@ Result_with_string NetworkMultipleDecoder::init(std::string video_url, std::stri
 	}
 	fragments[fragment_id] = tmp_ffmpeg_data;
 	decoder.change_ffmpeg_io_data(fragments[fragment_id], adjust_timestamp ? fragment_id * fragment_len : 0);
-	result = decoder.init(request_hw_decoder);
+	result = decoder.init(request_hw_decoder && mvd_inited); // no hardware decoding unless MVD really initialised
 	if (result.code != 0) {
 		goto cleanup;
 	}

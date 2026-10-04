@@ -21,6 +21,21 @@ static std::string html_decode(std::string s) {
 			pos += strlen(e.second);
 		}
 	}
+	// numeric entities: &#039; &#x27;
+	size_t p = 0;
+	while ((p = s.find("&#", p)) != std::string::npos) {
+		size_t semi = s.find(';', p);
+		if (semi == std::string::npos || semi - p > 8) { p += 2; continue; }
+		bool hex = p + 2 < semi && (s[p + 2] == 'x' || s[p + 2] == 'X');
+		long cp = strtol(s.c_str() + p + (hex ? 3 : 2), nullptr, hex ? 16 : 10);
+		std::string repl;
+		if (cp > 0 && cp < 0x80) repl = std::string(1, (char)cp);
+		else if (cp < 0x800) { repl.push_back((char)(0xC0 | (cp >> 6))); repl.push_back((char)(0x80 | (cp & 0x3F))); }
+		else if (cp < 0x10000) { repl.push_back((char)(0xE0 | (cp >> 12))); repl.push_back((char)(0x80 | ((cp >> 6) & 0x3F))); repl.push_back((char)(0x80 | (cp & 0x3F))); }
+		else { repl.push_back((char)(0xF0 | (cp >> 18))); repl.push_back((char)(0x80 | ((cp >> 12) & 0x3F))); repl.push_back((char)(0x80 | ((cp >> 6) & 0x3F))); repl.push_back((char)(0x80 | (cp & 0x3F))); }
+		s.replace(p, semi - p + 1, repl);
+		p += repl.size();
+	}
 	return s;
 }
 static std::string strip_cdata(const std::string &s) {

@@ -307,14 +307,13 @@ void NetworkStreamDownloader::downloader_thread() {
 			u64 expected_len = end - start;
 
 			auto &session_list = cur_stream->session_list ? *cur_stream->session_list : thread_network_session_list;
+			logger.info(LOG_THREAD_STR, "GET block " + std::to_string(block_reading) + " len=" + std::to_string(cur_stream->len) + " " + cur_stream->url);
 			// length not sure -> use Range header to get the size (slower)
-			auto result =
-			    cur_stream->len == 0
-			        ? session_list.perform(HttpRequest::GET(
-			              cur_stream->url,
-			              {{"Range", "bytes=" + std::to_string(start) + "-" + std::to_string(end - 1)}}))
-			        : session_list.perform(HttpRequest::GET(
-			              cur_stream->url + "&range=" + std::to_string(start) + "-" + std::to_string(end - 1), {}));
+			// Kamtape (like any normal HTTP server) honours the standard Range header, not YouTube's "&range=" URL parameter
+			// (which it ignores, answering with the whole file).
+			auto result = session_list.perform(HttpRequest::GET(
+			    cur_stream->url, {{"Range", "bytes=" + std::to_string(start) + "-" + std::to_string(end - 1)}}));
+			logger.info(LOG_THREAD_STR, std::string("result fail=") + (result.fail ? "1 " + result.error : "0") + " status=" + std::to_string(result.status_code) + " bytes=" + std::to_string(result.data.size()));
 			if (result.redirected_url != "") {
 				cur_stream->url = remove_url_parameter(result.redirected_url, "range");
 			}
