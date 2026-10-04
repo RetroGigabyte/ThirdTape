@@ -21,3 +21,16 @@ Video entries contain: author, id, title, length_seconds, rating_avg, rating_cou
 
 ## Not covered by the API (HTML scraping needed)
 Search, browse (`/browse?s=mp|mv|rf...`), categories (`/categories_portal?c=N`), channels/members pages.
+
+## Pages that are scraped (no API equivalent)
+- **Search:** `/results?search_type=search_videos&search_query=<q>&search_sort=relevance&search_category=0&page=<n>`; each
+  result is a `vEntry` block (id, thumbnail, title, runtime, "Added", "Views"). A "Next" link means more pages.
+- **Profile:** `/profile?user=<name>` (`/user/<name>` redirects there). The API's `about_me` is always empty; the bio is the
+  unlabelled paragraph in the profile box (`id="pBox"`), the other fields are `<span class="smallText">Label: </span><b>value</b>`.
+  The profile picture is the first image of that box (a 4:3 video thumbnail, `.../vi/<id>/2.jpg`).
+- **Playlists:** `/profile_play_list?user=<name>` lists them (`/view_play_list?p=<id>`); `/view_play_list?p=<id>` lists the videos.
+  A video in a playlist is opened as `/watch?v=<id>&list=<playlist id>` in the app.
+- **Comments:** the watch page has the first ones; `/comment_servlet?all_comments&v=<id>&fromurl=/watch?v=<id>` has all of
+  them. Each comment (`commentEntry`, replies are `commentEntryReply`) has a score in `comment_score_<comment id>` ("+9", "0", ...).
+- **Video files:** `get_video?video_id=<id>&webm=1` is MP4 with `Accept-Ranges: bytes` (the index is at the start of the
+  file). Range requests must use the `Range` header; Kamtape ignores YouTube-style `&range=` parameters and answers with the whole file.
