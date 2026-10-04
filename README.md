@@ -8,7 +8,7 @@ A homebrew [Kamtape](https://www.kamtape.com) client for the Nintendo 3DS: brows
 
 ThirdTape is an unofficial client and is not affiliated with Kamtape. It is based on [FourthTube](https://github.com/erievs/FourthTube) (a YouTube client): the interface, the video player and the streaming downloader come from there, and the YouTube data layer was replaced with one that talks to Kamtape.
 
-> **Status:** work in progress. Developed in the Azahar emulator and confirmed working on a real 3DS.
+> **Status:** work in progress. Developed in the Azahar emulator and confirmed working on a real New 3DS XL.
 
 ## Features
 - **Home:** the videos featured on Kamtape's front page.
