@@ -184,6 +184,38 @@ static void load_more_replies(void *);
 static void load_caption(void *);
 
 static void decode_thread(void *arg);
+
+// ---- Kamtape 5-star rating: Kamtape's own 11x11 stars (romfs:/gfx/draw/star.t3x: 0 = empty gray, 1 = filled green)
+static C2D_Image star_tex[2];
+static bool stars_ready = false;
+static void make_star_images() {
+	Result_with_string res = Draw_load_texture("romfs:/gfx/draw/star.t3x", 100, star_tex, 0, 2);
+	stars_ready = res.code == 0;
+}
+// draws 5 stars at their native 11x11 size with the given average rating (partially filled stars are cropped to whole
+// pixels); returns the total width
+static float draw_rating_stars(float x, float y, float rating) {
+	const int S = 11, gap = 1;
+	if (!stars_ready) {
+		return 0;
+	}
+	for (int i = 0; i < 5; i++) {
+		float sx = x + i * (S + gap);
+		Draw_texture(star_tex[0], sx, y, S, S);
+		float f = std::max(0.0f, std::min(1.0f, rating - i));
+		int w = (int)(f * S + 0.5f);
+		if (w > 0) {
+			C2D_Image part = star_tex[1];
+			Tex3DS_SubTexture sub = *star_tex[1].subtex;
+			sub.right = sub.left + (sub.right - sub.left) * w / S;
+			sub.width = (u16)w;
+			part.subtex = &sub;
+			Draw_texture(part, sx, y, w, S);
+		}
+	}
+	return 5 * S + 4 * gap;
+}
+
 static void convert_thread(void *arg);
 
 void VideoPlayer_init(void) {
@@ -585,6 +617,8 @@ debug_info_view =
 	                 result.code);
     }
 
+    make_star_images();
+
     result = Draw_load_texture("romfs:/gfx/draw/thumb_up.t3x", 63, var_texture_thumb_up, 0, 2);
     if (result.code != 0) {
 	    logger.error(DEF_SAPP0_INIT_STR, "Draw_load_texture()..." + result.string + result.error_description,
@@ -686,6 +720,7 @@ debug_info_view =
 	    for (int i = 0; i < 2; i++) {
 		    Draw_c2d_image_free(vid_image[i]);
 	    }
+
 
 	    logger.info(DEF_SAPP0_EXIT_STR, "Exited.");
     }
@@ -973,18 +1008,16 @@ debug_info_view =
 			                             ->set_text(tmp_video_info.publish_date)
 			                             ->set_x_alignment(TextView::XAlign::LEFT)
 			                             ->set_get_text_color([]() { return LIGHT0_TEXT_COLOR; })}),
-			        (new CustomView(0, 0, 320, DEFAULT_FONT_INTERVAL)) // like/dislike
+			        (new CustomView(0, 0, 320, DEFAULT_FONT_INTERVAL)) // 5-star rating
 			            ->set_draw([](const CustomView &view) {
-				            int y = view.y0;
 				            float x = view.x0 + SMALL_MARGIN;
-				            Draw_texture(var_texture_thumb_up[var_night_mode], x, y, 16, 16);
-				            x += 16 + SMALL_MARGIN;
-				            Draw(cur_video_info.like_count_str, x, y, 0.5, 0.5, LIGHT0_TEXT_COLOR);
-				            x += Draw_get_width(cur_video_info.like_count_str, 0.5) + SMALL_MARGIN * 2;
-
-				            Draw_texture(var_texture_thumb_down[var_night_mode], x, y, 16, 16);
-				            x += 16 + SMALL_MARGIN;
-				            Draw(cur_video_info.dislike_count_str, x, y, 0.5, 0.5, LIGHT0_TEXT_COLOR);
+				            float y = view.y0;
+				            x += draw_rating_stars(x, y + 2, cur_video_info.rating_avg) + SMALL_MARGIN * 2;
+				            std::string text = cur_video_info.rating_count > 0
+				                                   ? std::to_string(cur_video_info.rating_count) +
+				                                         (cur_video_info.rating_count == 1 ? " rating" : " ratings")
+				                                   : "No ratings yet";
+				            Draw(text, x, y, 0.5, 0.5, LIGHT0_TEXT_COLOR);
 			            }),
 			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; }),
 			        (new HorizontalListView(0, 0, ICON_SIZE)) // author

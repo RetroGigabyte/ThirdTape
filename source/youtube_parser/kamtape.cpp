@@ -338,12 +338,8 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	res.views_str = views_text(xml_text(x, "view_count"));
 	res.publish_date = time_ago(atoll(xml_text(x, "upload_time").c_str()));
 	res.duration_ms = atoi(xml_text(x, "length_seconds").c_str()) * 1000;
-	std::string avg = xml_text(x, "rating_avg"), cnt = xml_text(x, "rating_count");
-	if (!avg.empty()) {
-		char buf[64];
-		snprintf(buf, sizeof(buf), "%.1f/5 (%s)", atof(avg.c_str()), cnt.c_str());
-		res.like_count_str = buf;
-	}
+	res.rating_avg = (float)atof(xml_text(x, "rating_avg").c_str());
+	res.rating_count = atoi(xml_text(x, "rating_count").c_str());
 	res.succinct_thumbnail_url = kamtape_thumbnail_url(id);
 	res.both_stream_url = kamtape_stream_url(id);
 	res.audio_stream_url = res.both_stream_url; // audio-only mode plays the same file

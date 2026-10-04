@@ -86,6 +86,8 @@ struct YouTubeVideoDetail {
 	std::string playability_reason;
 	int stream_fragment_len; // used only for livestreams
 	std::string like_count_str;
+	float rating_avg = 0;  // Kamtape: 5-star rating average (0 if unrated)
+	int rating_count = 0;  // number of ratings
 	std::string dislike_count_str;
 	std::string publish_date;
 	std::string views_str;
