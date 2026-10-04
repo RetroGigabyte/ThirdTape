@@ -10,9 +10,9 @@
 #include "variables.hpp"
 #include "util/timestamp_parser.hpp"
 
-// Kamtape comments show neither profile pictures nor like counts: no icon column and no like row
-#define POST_ICON_SIZE 0
-#define REPLY_ICON_SIZE 0
+// Kamtape comments have no profile pictures; the left column holds a Reddit-style vote display (arrow, score, arrow)
+#define POST_ICON_SIZE 32
+#define REPLY_ICON_SIZE 32
 #define POST_FOOTER_HEIGHT (SMALL_MARGIN * 2) // space below a comment (used to be the like row)
 #define COMMUNITY_IMAGE_SIZE (var_community_image_size)
 
@@ -52,9 +52,15 @@ struct PostView : public FixedWidthView {
 	void reset_timestamp_holding_status();
 	void draw_content_line_with_timestamps(size_t line_index, float x, float y) const;
 	void handle_timestamp_touch(Hid_info key, size_t line_index, float line_x, float line_y);
+	void draw_vote_column(float x, float y) const;
 
 	// position-related functions
-	inline float get_icon_size() const { return is_reply ? REPLY_ICON_SIZE : POST_ICON_SIZE; }
+	inline float get_icon_size() const {
+		if (upvote_str.empty()) {
+			return 0; // no score (e.g. replies without votes): no column
+		}
+		return is_reply ? REPLY_ICON_SIZE : POST_ICON_SIZE;
+	}
 	float content_x_pos() const {
 		if (is_description_mode) {
 			return x0 + SMALL_MARGIN;

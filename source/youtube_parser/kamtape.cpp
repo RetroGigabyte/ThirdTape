@@ -234,6 +234,77 @@ static KtProfile kamtape_profile(const std::string &user) {
 }
 static std::string kamtape_profile_picture(const std::string &user) { return kamtape_profile(user).icon; }
 
+
+// ------------------------------------------------------------------------------------------------ comments (scraped)
+// Comments with scores and replies come from the HTML: the watch page has the first ones, and
+// /comment_servlet?all_comments&v=<id> has all of them. Replies (class commentEntryReply) follow their comment.
+static std::string comment_text(std::string raw) {
+	for (const char *br : {"<br />", "<br/>", "<br>"}) {
+		size_t p = 0;
+		while ((p = raw.find(br, p)) != std::string::npos) {
+			raw.replace(p, strlen(br), "\n");
+			p += 1;
+		}
+	}
+	return trim_ws(html_decode(strip_tags(raw)));
+}
+static std::vector<YouTubeVideoDetail::Comment> parse_comments_html(const std::string &h) {
+	std::vector<YouTubeVideoDetail::Comment> out;
+	std::vector<std::pair<size_t, bool>> marks; // position, is_reply
+	size_t pos = 0;
+	while ((pos = h.find("class=\"commentEntry", pos)) != std::string::npos) {
+		char c = h[pos + 19];
+		if (c == '"') marks.push_back({pos, false});
+		else if (h.compare(pos + 19, 6, "Reply\"") == 0) marks.push_back({pos, true});
+		pos += 19;
+	}
+	for (size_t i = 0; i < marks.size(); i++) {
+		size_t end = i + 1 < marks.size() ? marks[i + 1].first : h.size();
+		std::string b = h.substr(marks[i].first, end - marks[i].first);
+		YouTubeVideoDetail::Comment c;
+		c.reply_num = 0;
+		size_t idp = b.find("id=\"comment_");
+		if (idp != std::string::npos) {
+			idp += 12;
+			c.id = b.substr(idp, b.find('"', idp) - idp);
+		}
+		size_t ap = b.find("<b><a href=\"/user/");
+		if (ap != std::string::npos) {
+			ap += 18;
+			c.author.name = b.substr(ap, b.find('"', ap) - ap);
+			c.author.id = c.author.name;
+		}
+		size_t tp = b.find("<span class=\"smallText\"> (");
+		if (tp != std::string::npos) {
+			tp += 26;
+			c.publish_date = trim_ws(b.substr(tp, b.find(")", tp) - tp));
+		}
+		if (!c.id.empty()) {
+			size_t sp = b.find("id=\"comment_score_" + c.id + "\"");
+			if (sp != std::string::npos) {
+				sp = b.find('>', sp);
+				if (sp != std::string::npos) c.upvotes_str = trim_ws(html_decode(b.substr(sp + 1, b.find('<', sp) - sp - 1)));
+			}
+		}
+		size_t bp = b.find("class=\"commentBody marL8 normalText\"");
+		if (bp != std::string::npos) {
+			bp = b.find('>', bp);
+			size_t be = b.find("</div>", bp);
+			if (bp != std::string::npos && be != std::string::npos) c.content = comment_text(b.substr(bp + 1, be - bp - 1));
+		}
+		if (c.content.empty() && c.author.name.empty()) continue;
+		if (marks[i].second) {
+			if (!out.empty()) {
+				out.back().replies.push_back(c);
+				out.back().reply_num++;
+			}
+		} else {
+			out.push_back(c);
+		}
+	}
+	return out;
+}
+
 // ------------------------------------------------------------------------------------------------ home
 YouTubeHomeResult youtube_load_home_page() {
 	YouTubeHomeResult res;
@@ -345,20 +416,29 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	res.audio_stream_url = res.both_stream_url; // audio-only mode plays the same file
 	res.playability_status = "OK";
 
-	// comments
-	size_t cl = x.find("<comment_list>");
-	size_t pos = cl;
-	while (cl != std::string::npos && (pos = x.find("<comment>", pos)) != std::string::npos) {
-		size_t end = x.find("</comment>", pos);
-		if (end == std::string::npos) break;
-		YouTubeVideoDetail::Comment c;
-		c.author.name = xml_text(x, "author", pos, end);
-		c.author.id = c.author.name;
-		c.content = xml_text(x, "text", pos, end);
-		c.publish_date = time_ago(atoll(xml_text(x, "time", pos, end).c_str()));
-		c.reply_num = 0;
-		res.comments.push_back(c);
-		pos = end + 10;
+	// comments: first ones with scores from the watch page (HTML); the API's comments (no scores) are the fallback
+	{
+		auto wp = http_get(kamtape_video_url(id));
+		if (wp.first) {
+			res.comments = parse_comments_html(wp.second);
+			if (wp.second.find("comment_servlet?all_comments") != std::string::npos) res.comment_continue_type = 0;
+		}
+	}
+	if (res.comments.empty()) {
+		size_t cl = x.find("<comment_list>");
+		size_t pos = cl;
+		while (cl != std::string::npos && (pos = x.find("<comment>", pos)) != std::string::npos) {
+			size_t end = x.find("</comment>", pos);
+			if (end == std::string::npos) break;
+			YouTubeVideoDetail::Comment c;
+			c.author.name = xml_text(x, "author", pos, end);
+			c.author.id = c.author.name;
+			c.content = xml_text(x, "text", pos, end);
+			c.publish_date = time_ago(atoll(xml_text(x, "time", pos, end).c_str()));
+			c.reply_num = 0;
+			res.comments.push_back(c);
+			pos = end + 10;
+		}
 	}
 
 	// playlist context (the URL carries &list=<playlist id>)
@@ -442,7 +522,18 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	return res;
 }
 void YouTubeVideoDetail::load_more_suggestions() { suggestions_continue_token = ""; }
-void YouTubeVideoDetail::load_more_comments() { comment_continue_type = -1; }
+// Loads the complete comment list and appends the comments that are not shown yet
+void YouTubeVideoDetail::load_more_comments() {
+	comment_continue_type = -1;
+	auto r = http_get(std::string(KT_HOST) + "/comment_servlet?all_comments&v=" + id + "&fromurl=/watch?v=" + id);
+	if (!r.first) return;
+	auto all = parse_comments_html(r.second);
+	std::map<std::string, bool> have;
+	for (auto &c : comments) have[c.id] = true;
+	for (auto &c : all) {
+		if (!c.id.empty() && !have.count(c.id)) comments.push_back(c);
+	}
+}
 void YouTubeVideoDetail::load_caption(const std::string &, const std::string &) {}
 void YouTubeVideoDetail::Comment::load_more_replies() { replies_continue_token = ""; }
 

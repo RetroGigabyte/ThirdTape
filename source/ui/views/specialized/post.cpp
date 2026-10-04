@@ -13,6 +13,16 @@ void PostView::cancel_all_thumbnail_requests() {
 		additional_video_view->thumbnail_handle = -1;
 	}
 }
+// up arrow, score (green > 0, red < 0, gray = 0) and down arrow; voting needs a Kamtape login, so this is display only
+void PostView::draw_vote_column(float x, float y) const {
+	const float w = 26;
+	const u32 arrow = 0xFFA0A0A0;
+	u32 color = upvote_str[0] == '+' ? 0xFF2E8B2E : upvote_str[0] == '-' ? 0xFF3030D0 : LIGHT1_TEXT_COLOR;
+	float cx = x + w / 2;
+	C2D_DrawTriangle(cx, y + 1, arrow, cx - 6, y + 8, arrow, cx + 6, y + 8, arrow, 0);
+	Draw_x_centered(upvote_str, x, x + w, y + 8, 0.45, 0.45, color);
+	C2D_DrawTriangle(cx - 6, y + 22, arrow, cx + 6, y + 22, arrow, cx, y + 29, arrow, 0);
+}
 void PostView::draw_() const {
 	int cur_y = y0;
 
@@ -24,7 +34,7 @@ void PostView::draw_() const {
 			Draw(time_str, x, cur_y - 2, 0.45, 0.45, LIGHT1_TEXT_COLOR);
 		}
 		if (cur_y < 240 && cur_y + get_icon_size() > 0) {
-			thumbnail_draw(author_icon_handle, x0 + SMALL_MARGIN, cur_y, get_icon_size(), get_icon_size());
+			draw_vote_column(x0 + SMALL_MARGIN, cur_y);
 		}
 		cur_y += DEFAULT_FONT_INTERVAL;
 	}
@@ -110,8 +120,7 @@ void PostView::update_(Hid_info key) {
 	int cur_y = y0;
 
 	if (!is_description_mode) {
-		bool inside_author_icon = in_range(key.touch_x, x0, std::min<float>(x1, x0 + get_icon_size() + SMALL_MARGIN)) &&
-		                          in_range(key.touch_y, cur_y, cur_y + get_icon_size());
+		bool inside_author_icon = false; // the left column is the (display-only) vote column
 
 		if (key.p_touch && inside_author_icon) {
 			icon_holding = true;
