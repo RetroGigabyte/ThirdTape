@@ -41,7 +41,11 @@ void PostView::draw_() const {
 			}
 		}
 		if (cur_y < 240 && cur_y + get_icon_size() > 0) {
-			draw_vote_column(x0 + SMALL_MARGIN, cur_y);
+			if (!upvote_str.empty()) {
+				draw_vote_column(x0 + SMALL_MARGIN, cur_y);
+			} else {
+				thumbnail_draw(author_icon_handle, x0 + SMALL_MARGIN, cur_y, get_icon_size(), get_icon_size()); // channel comments
+			}
 		}
 		cur_y += DEFAULT_FONT_INTERVAL;
 	}

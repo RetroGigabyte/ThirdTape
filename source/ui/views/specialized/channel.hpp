@@ -18,6 +18,7 @@ struct ChannelView : public FixedSizeView {
 
 	CallBackFuncType on_subscribe_button_released;
 	std::function<bool()> get_is_subscribed;
+	std::function<bool()> get_hide_subscribe; // true: no Subscribe button (your own channel)
 
 	ChannelView(double x0, double y0, double width, double height)
 	    : View(x0, y0), FixedSizeView(x0, y0, width, height) {}
@@ -46,6 +47,10 @@ struct ChannelView : public FixedSizeView {
 	}
 	ChannelView *set_on_subscribe_button_released(CallBackFuncType on_subscribe_button_released) {
 		this->on_subscribe_button_released = on_subscribe_button_released;
+		return this;
+	}
+	ChannelView *set_get_hide_subscribe(std::function<bool()> get_hide_subscribe) {
+		this->get_hide_subscribe = get_hide_subscribe;
 		return this;
 	}
 	ChannelView *set_get_is_subscribed(std::function<bool()> get_is_subscribed) {
@@ -77,6 +82,9 @@ struct ChannelView : public FixedSizeView {
 				     LIGHT1_TEXT_COLOR);
 			}
 
+			if (get_hide_subscribe && get_hide_subscribe()) {
+				return;
+			}
 			bool is_subscribed = get_is_subscribed();
 			u32 subscribe_button_color = is_subscribed ? (u32)BUTTON_COLOR : 0xFF40B040;
 			std::string subscribe_button_str = is_subscribed ? LOCALIZED(SUBSCRIBED) : LOCALIZED(SUBSCRIBE);
@@ -88,6 +96,10 @@ struct ChannelView : public FixedSizeView {
 		}
 	}
 	void update_(Hid_info key) override {
+		if (get_hide_subscribe && get_hide_subscribe()) {
+			subscribe_button_holding = false;
+			return;
+		}
 		int subscribe_button_y = y0 + SMALL_MARGIN + CHANNEL_ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT - SMALL_MARGIN;
 		bool in_subscribe_button = key.touch_x >= x1 - SMALL_MARGIN * 2 - SUBSCRIBE_BUTTON_WIDTH &&
 		                           key.touch_x < x1 - SMALL_MARGIN * 2 && key.touch_y >= subscribe_button_y &&

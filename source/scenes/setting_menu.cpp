@@ -19,6 +19,7 @@
 #include "rapidjson_wrapper.hpp"
 #include "oauth/oauth.hpp"
 #include "util/async_task.hpp"
+#include "data_io/subscription_util.hpp"
 
 struct SectionTitleWithInfoView : public FixedSizeView {
 	UI::FlexibleString<SectionTitleWithInfoView> title_text;
@@ -323,9 +324,26 @@ static void update_worker_thread_func(void *) {
 	threadExit(0);
 }
 
+// copies the account's subscriptions into the app (and drops local ones the account doesn't have)
+static void sync_subscriptions_task(void *) {
+	std::string err = kamtape_sync_subscriptions();
+	if (err.empty()) {
+		save_subscription();
+		Home_update_local_channels();
+	}
+	var_need_refresh = true;
+}
+
 static void kamtape_login_task(void *) {
 	std::string err = kamtape_login(account_user_input, account_pass_input);
 	account_pass_input.clear();
+	if (err.empty()) {
+		std::string sync_err = kamtape_sync_subscriptions(); // runs on this worker thread
+		if (sync_err.empty()) {
+			save_subscription();
+			Home_update_local_channels();
+		}
+	}
 	account_message = err;
 	account_busy = false;
 	var_need_refresh = true;
@@ -812,6 +830,9 @@ void Sem_init(void) {
 	oauth_worker_thread = threadCreate(oauth_worker_thread_func, (void*)(""), DEF_STACKSIZE, DEF_THREAD_PRIORITY_LOW, 1, false);
 	
 	kamtape_account_init(); // restore the saved Kamtape login session
+	if (kamtape_logged_in()) {
+		queue_async_task(sync_subscriptions_task, NULL); // keep the subscriptions in step with the account
+	}
 
 	// Initialize OAuth
 	OAuth::init();

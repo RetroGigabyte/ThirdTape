@@ -279,6 +279,16 @@ std::string kamtape_login(const std::string &user, const std::string &pass);
 void kamtape_logout();
 // posts a comment (parent_id empty) or a reply to the comment with that id; returns "" on success, otherwise a message
 std::string kamtape_post_comment(const std::string &video_id, const std::string &parent_id, const std::string &text);
+// subscriptions of the logged-in account (POST /subscription_center add_user / remove_user); "" on success, else a message
+std::string kamtape_subscribe(const std::string &user);
+std::string kamtape_unsubscribe(const std::string &user);
+// copies the account's subscriptions into the local list (and removes local ones that are not on the account);
+// returns "" on success. Runs several requests: call it from a worker thread.
+std::string kamtape_sync_subscriptions();
+bool kamtape_is_me(const std::string &user); // same name as the logged-in user (case-insensitive)
+// channel comments: a captcha image URL to show, and the post call (comment max 255 characters)
+std::string kamtape_new_captcha_url();
+std::string kamtape_post_channel_comment(const std::string &user, const std::string &text, const std::string &captcha);
 
 /* -------------------------------- utils.cpp -------------------------------- */
 std::string youtube_get_video_id_by_url(const std::string &url);

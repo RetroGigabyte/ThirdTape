@@ -58,8 +58,8 @@ struct PostView : public FixedWidthView {
 
 	// position-related functions
 	inline float get_icon_size() const {
-		if (upvote_str.empty()) {
-			return 0; // no score (e.g. replies without votes): no column
+		if (upvote_str.empty() && author_icon_url.empty()) {
+			return 0; // neither a score nor a picture: no left column
 		}
 		return is_reply ? REPLY_ICON_SIZE : POST_ICON_SIZE;
 	}

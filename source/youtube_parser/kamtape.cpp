@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "internal_common.hpp"
 #include "parser.hpp"
+#include "data_io/subscription_util.hpp"
 
 static const char *KT_HOST = "https://www.kamtape.com";
 
@@ -497,6 +498,155 @@ static std::vector<YouTubeVideoDetail::Comment> parse_comments_html(const std::s
 	return out;
 }
 
+
+// ------------------------------------------------------------------------------------------------ subscriptions (account)
+bool kamtape_is_me(const std::string &user) {
+	std::string me = kamtape_username();
+	if (me.empty() || me.size() != user.size()) return false;
+	for (size_t i = 0; i < me.size(); i++)
+		if (tolower((unsigned char)me[i]) != tolower((unsigned char)user[i])) return false;
+	return true;
+}
+static std::string subscription_post(const char *field, const std::string &user) {
+	if (!kamtape_logged_in()) return "Please log in first (Settings).";
+	if (kamtape_is_me(user)) return "You can't subscribe to yourself.";
+	std::map<std::string, std::string> headers = {{"Content-Type", "application/x-www-form-urlencoded"},
+	                                              {"Referer", std::string(KT_HOST) + "/profile?user=" + url_encode(user)}};
+	auto res = thread_network_session_list.perform(
+	    HttpRequest::POST(std::string(KT_HOST) + "/subscription_center", headers, std::string(field) + "=" + url_encode(user)));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	if (res.status_code >= 400) return "Kamtape refused the request (" + std::to_string(res.status_code) + ").";
+	std::string html(res.data.begin(), res.data.end());
+	if (html.find("name=\"password\"") != std::string::npos) return "Your login has expired. Please log in again.";
+	return "";
+}
+std::string kamtape_subscribe(const std::string &user) { return subscription_post("add_user", user); }
+std::string kamtape_unsubscribe(const std::string &user) { return subscription_post("remove_user", user); }
+
+std::string kamtape_sync_subscriptions() {
+	if (!kamtape_logged_in()) return "Please log in first (Settings).";
+	auto page = thread_network_session_list.perform(http_get_request(std::string(KT_HOST) + "/subscription_center"));
+	if (page.fail) return "Couldn't reach Kamtape.";
+	std::string html(page.data.begin(), page.data.end());
+	if (html.find("name=\"password\"") != std::string::npos) return "Your login has expired. Please log in again.";
+	// <li ><a href="/subscription_center?user=NAME">NAME</a></li> inside the manage navigation
+	std::vector<std::string> names;
+	size_t nav = html.find("id=\"manageNav\"");
+	size_t pos = nav;
+	while (nav != std::string::npos && (pos = html.find("/subscription_center?user=", pos)) != std::string::npos) {
+		pos += 26;
+		size_t end = html.find('"', pos);
+		if (end == std::string::npos) break;
+		std::string name = html.substr(pos, end - pos);
+		if (!name.empty() && !kamtape_is_me(name) && std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+	}
+	if (nav == std::string::npos) return "Couldn't read the subscription list.";
+	// local list -> match the account
+	for (auto &c : get_valid_subscribed_channels()) {
+		if (std::find(names.begin(), names.end(), c.id) == names.end()) subscription_unsubscribe(c.id);
+	}
+	for (auto &name : names) {
+		if (subscription_is_subscribed(name)) continue;
+		SubscriptionChannel ch;
+		ch.id = name;
+		ch.name = name;
+		ch.url = std::string(KT_HOST) + "/user/" + name;
+		ch.icon_url = kamtape_profile_picture(name);
+		subscription_subscribe(ch);
+	}
+	return "";
+}
+
+// ------------------------------------------------------------------------------------------------ channel comments
+// The wall comments of a channel: /profile_comment_all?user=<name>: rows with the commenter's picture, name, date, an
+// optionally attached video and the text.
+void YouTubeChannelDetail::load_more_community_posts() {
+	// one page (10 comments) per call; the continuation token is the next page number
+	int page = community_continuation_token.empty() ? 1 : atoi(community_continuation_token.c_str());
+	community_continuation_token = "";
+	community_loaded = true;
+	auto r = http_get(std::string(KT_HOST) + "/profile_comment_all?user=" + url_encode(id) + "&page=" + std::to_string(page));
+	if (!r.first) return;
+	const std::string &h = r.second;
+	size_t pos = 0;
+	while ((pos = h.find("<tr class=\"commentsTableFull\">", pos)) != std::string::npos) {
+		size_t next = h.find("<tr class=\"commentsTableFull\">", pos + 10);
+		std::string row = h.substr(pos, next == std::string::npos ? std::string::npos : next - pos);
+		pos = next == std::string::npos ? h.size() : next;
+		CommunityPost post;
+		size_t img = row.find("<img src=\"");
+		if (img != std::string::npos) {
+			img += 10;
+			post.author_icon_url = row.substr(img, row.find('"', img) - img);
+		}
+		size_t st = row.find("<strong>");
+		size_t se = row.find("</strong>", st == std::string::npos ? 0 : st);
+		if (st == std::string::npos || se == std::string::npos) continue;
+		std::string head = row.substr(st, se - st);
+		size_t an = head.find("<a href=\"/user/");
+		if (an != std::string::npos) {
+			an += 15;
+			post.author_name = head.substr(an, head.find('"', an) - an);
+		}
+		size_t dt = head.find("class=\"labels\">");
+		if (dt != std::string::npos) {
+			dt += 16;
+			post.time = trim_ws(html_decode(strip_tags(head.substr(dt, head.find("</span>", dt) - dt))));
+			if (!post.time.empty() && post.time[0] == '|') post.time = trim_ws(post.time.substr(1));
+		}
+		std::string rest = row.substr(se + 9);
+		size_t wv = rest.find("<a href=\"/watch?v=");
+		if (wv != std::string::npos) {
+			size_t we = rest.find("</a>", wv);
+			std::string vid = rest.substr(wv + 18, 11);
+			post.video.url = kamtape_video_url(vid);
+			post.video.thumbnail_url = kamtape_thumbnail_url(vid);
+			post.video.title = "Attached video";
+			if (we != std::string::npos) rest.erase(wv, we + 4 - wv);
+		}
+		size_t te = rest.find("</td>");
+		if (te != std::string::npos) rest = rest.substr(0, te);
+		post.message = comment_text(rest);
+		if (post.author_name.empty() || post.message.empty()) continue;
+		community_posts.push_back(post);
+	}
+	if (h.find("profile_comment_all?user=" + id + "&page=" + std::to_string(page + 1)) != std::string::npos) {
+		community_continuation_token = std::to_string(page + 1);
+	}
+}
+
+// the picture is a new random one on every request; the answer to it is checked together with the comment
+std::string kamtape_new_captcha_url() {
+	static int counter = 0;
+	return "https://sys.kamtape.com/baptcha/baptcha.php?nojs&r=" + std::to_string((int)time(nullptr)) + std::to_string(counter++);
+}
+std::string kamtape_post_channel_comment(const std::string &user, const std::string &text, const std::string &captcha) {
+	if (!kamtape_logged_in()) return "Please log in first (Settings).";
+	std::string t = trim_ws(text);
+	if (t.empty()) return "Write something first.";
+	size_t chars = 0;
+	for (unsigned char c : t) chars += (c & 0xC0) != 0x80;
+	if (chars > 255) return "Channel comments are limited to 255 characters.";
+	if (trim_ws(captcha).empty()) return "Enter the letters from the picture.";
+	std::string url = std::string(KT_HOST) + "/profile_comment_post?user=" + url_encode(user);
+	std::string body = "comment=" + url_encode(t) + "&field_reference_video=&_BAPTCHA=&_BAPTCHA_NOJS=&_BAPTCHA_KEY=" + url_encode(trim_ws(captcha));
+	std::map<std::string, std::string> headers = {{"Content-Type", "application/x-www-form-urlencoded"}, {"Referer", url}};
+	auto res = thread_network_session_list.perform(HttpRequest::POST(url, headers, body));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	if (res.status_code >= 300 && res.status_code < 400) return ""; // redirected back to the channel: posted
+	std::string html(res.data.begin(), res.data.end());
+	size_t eb = html.find("class=\"error");
+	if (eb != std::string::npos) {
+		size_t gt = html.find('>', eb), end = html.find("</div>", eb);
+		if (gt != std::string::npos && end != std::string::npos && end > gt) {
+			std::string msg = trim_ws(html_decode(strip_tags(html.substr(gt + 1, end - gt - 1))));
+			if (!msg.empty()) return msg;
+		}
+	}
+	if (res.status_code == 200 && html.find("_BAPTCHA_KEY") == std::string::npos) return ""; // no form again: accepted
+	return "The letters didn't match, or Kamtape refused the comment. Please try again.";
+}
+
 // ------------------------------------------------------------------------------------------------ home
 YouTubeHomeResult youtube_load_home_page() {
 	YouTubeHomeResult res;
@@ -749,6 +899,7 @@ YouTubeChannelDetail youtube_load_channel_page(std::string url_or_id) {
 	// tells the UI that the Playlists tab can be loaded (see load_playlists())
 	res.playlist_tab_browse_id = user;
 	res.playlist_tab_params = "kamtape";
+	res.community_loaded = false; // the channel comments load when their tab is opened
 	auto vids = http_get(api_url("kamtape.videos.list_by_user", "user=" + url_encode(user)));
 	if (vids.first) res.videos = parse_api_video_list(vids.second);
 	return res;
@@ -813,6 +964,6 @@ void YouTubeChannelDetail::load_playlists() {
 	}
 	if (!items.empty()) playlists.push_back({"Playlists", items});
 }
-void YouTubeChannelDetail::load_more_community_posts() { community_continuation_token = ""; }
+
 
 void youtube_change_content_language(std::string) {}

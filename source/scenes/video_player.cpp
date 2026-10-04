@@ -1130,6 +1130,9 @@ debug_info_view =
 			                     ? (View *)(new EmptyView(0, 0, 0, ICON_SIZE))
 			                     : (View *)(new CustomView(0, 0, SUBSCRIBE_BUTTON_WIDTH, ICON_SIZE))
 			                           ->set_draw([author_id](const CustomView &view) {
+				                           if (kamtape_is_me(author_id)) {
+					                           return; // your own video: no Subscribe button
+				                           }
 				                           bool is_subscribed = subscription_is_subscribed(author_id);
 				                           u32 button_color = is_subscribed ? (u32)BUTTON_COLOR : 0xFF40B040;
 				                           std::string button_text =
@@ -1147,8 +1150,16 @@ debug_info_view =
 				                                            key.touch_x < view.x0 + SUBSCRIBE_BUTTON_WIDTH &&
 				                                            key.touch_y >= button_y &&
 				                                            key.touch_y < button_y + SUBSCRIBE_BUTTON_HEIGHT;
-				                           if (key.p_touch && in_button) {
+				                           if (key.p_touch && in_button && !kamtape_is_me(author_id)) {
 					                           bool cur_subscribed = subscription_is_subscribed(author_id);
+					                           if (kamtape_logged_in()) { // the account's subscriptions are kept on Kamtape
+						                           std::string err = cur_subscribed ? kamtape_unsubscribe(author_id) : kamtape_subscribe(author_id);
+						                           if (!err.empty()) {
+							                           Util_err_set_error_message("Subscription", err, "video page");
+							                           Util_err_set_error_show_flag(true);
+							                           return;
+						                           }
+					                           }
 					                           if (cur_subscribed) {
 						                           subscription_unsubscribe(author_id);
 					                           } else {

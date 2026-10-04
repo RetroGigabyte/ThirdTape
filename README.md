@@ -16,8 +16,8 @@ ThirdTape is an unofficial client and is not affiliated with Kamtape. It is base
 - **Video player:** streams Kamtape's MP4 files (`get_video?video_id=ID&webm=1`) with HTTP range requests, so playback starts before the whole file is downloaded and seeking works. Software decoding everywhere, plus the New 3DS hardware decoder inherited from FourthTube (not yet verified on a real console).
 - **Ratings:** Kamtape's 5-star rating with the number of ratings.
 - **Comments:** with their scores (Reddit-style up/down column) and replies. The first comments load immediately, the rest as you scroll. When logged in you can post comments and reply to comments.
-- **Channels:** profile picture, bio and profile fields, counters, the user's videos, and their playlists. Opening a playlist plays through it.
-- **Subscriptions** and **watch history**, stored on the SD card (local to the app).
+- **Channels:** profile picture, bio and profile fields, counters, the user's videos, their playlists, and the comments left on the channel (with the commenters' pictures and attached videos). When logged in you can comment on a channel (Kamtape asks for a captcha: the picture is shown on the top screen, you type the letters).
+- **Subscriptions** and **watch history**. History is local to the app. When logged in, subscriptions are the account's: they are read from Kamtape at startup and after login, and subscribing/unsubscribing is sent to the account. (You can't subscribe to yourself.)
 - **Login** with your Kamtape username and password (Settings). Only the session cookie is saved to the SD card, never the password. The session is sent with every request to kamtape.com.
 - English only (like Kamtape).
 - A UI in the style of the 3DS System Settings, with a green accent.

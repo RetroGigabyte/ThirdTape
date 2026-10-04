@@ -94,6 +94,123 @@ static void load_channel_shorts(void *);
 static void load_channel_shorts_more(void *);
 static void load_channel_playlists(void *);
 static void load_channel_community_posts(void *);
+static bool send_load_request(std::string url);
+
+// ---- commenting on a channel (needs a login): comment text -> verification picture (shown big on the top screen) ->
+// the letters -> post
+enum { CC_IDLE, CC_FETCHING, CC_ENTER_CODE, CC_POSTING };
+static volatile int cc_state = CC_IDLE;
+static std::string cc_text, cc_user, cc_status;
+static int cc_captcha_handle = -1;
+static OverlayDialogView *cc_dialog = NULL;
+struct CcJob {
+	std::string user, text, code;
+};
+static void cc_reset() {
+	if (cc_captcha_handle != -1) {
+		thumbnail_cancel_request(cc_captcha_handle);
+		cc_captcha_handle = -1;
+	}
+	cc_state = CC_IDLE;
+	var_need_refresh = true;
+}
+static void cc_post_task(void *arg) {
+	CcJob *job = (CcJob *)arg;
+	std::string err = kamtape_post_channel_comment(job->user, job->text, job->code);
+	std::string user = job->user;
+	delete job;
+	cc_status = err.empty() ? "Comment posted!" : err;
+	cc_reset();
+	if (err.empty()) {
+		send_load_request(user); // reload the channel: the new comment shows up in the Comments tab
+	}
+}
+static void cc_start() {
+	if (cc_state != CC_IDLE) {
+		return;
+	}
+	if (!kamtape_logged_in()) {
+		cc_status = "Log in from Settings to comment.";
+		var_need_refresh = true;
+		return;
+	}
+	SwkbdState kb;
+	swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 255);
+	swkbdSetFeatures(&kb, SWKBD_MULTILINE | SWKBD_PREDICTIVE_INPUT);
+	swkbdSetHintText(&kb, "Write a comment (255 characters max)");
+	swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+	char text[800] = {0};
+	video_set_skip_drawing(true);
+	SwkbdButton pressed = swkbdInputText(&kb, text, sizeof(text));
+	video_set_skip_drawing(false);
+	var_need_refresh = true;
+	if (pressed != SWKBD_BUTTON_RIGHT) {
+		return;
+	}
+	cc_text = text;
+	cc_user = channel_info.id;
+	cc_captcha_handle = thumbnail_request(kamtape_new_captcha_url(), SceneType::CHANNEL, PRIORITY_FOREGROUND, ThumbnailType::DEFAULT);
+	cc_state = CC_FETCHING;
+	cc_status = "Loading the verification picture...";
+}
+// called every frame: moves the commenting steps along
+static void cc_update() {
+	if (cc_state != CC_FETCHING) {
+		return;
+	}
+	if (thumbnail_is_available(cc_captcha_handle)) {
+		cc_state = CC_ENTER_CODE;
+		cc_status = "";
+		cc_dialog->get_message_view()
+		    ->set_text([]() { return std::string("Type the 5 letters shown on the top screen."); })
+		    ->update_y_range(0, 30);
+		cc_dialog->set_buttons<std::function<std::string()>>(
+		    {[]() { return std::string("Cancel"); }, []() { return std::string("Enter the letters"); }},
+		    [](OverlayDialogView &, int button) {
+			    if (button == 0) {
+				    cc_reset();
+				    return true;
+			    }
+			    SwkbdState kb;
+			    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 8);
+			    swkbdSetHintText(&kb, "The letters from the picture");
+			    swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+			    char code[32] = {0};
+			    video_set_skip_drawing(true);
+			    SwkbdButton pressed = swkbdInputText(&kb, code, sizeof(code));
+			    video_set_skip_drawing(false);
+			    if (pressed != SWKBD_BUTTON_RIGHT) {
+				    cc_reset();
+				    return true;
+			    }
+			    cc_state = CC_POSTING;
+			    cc_status = "Posting...";
+			    queue_async_task(cc_post_task, new CcJob{cc_user, cc_text, code});
+			    return true;
+		    });
+		cc_dialog->set_on_cancel([](OverlayView &view) {
+			cc_reset();
+			view.set_is_visible(false);
+		});
+		cc_dialog->set_is_visible(true);
+	} else {
+		int status = thumbnail_get_status_code(cc_captcha_handle);
+		if (status != 0 && status / 100 != 2) {
+			cc_status = "Couldn't load the verification picture.";
+			cc_reset();
+		}
+	}
+	var_need_refresh = true;
+}
+static void cc_draw_top_screen() {
+	if (cc_state != CC_FETCHING && cc_state != CC_ENTER_CODE) {
+		return;
+	}
+	Draw_texture(var_square_image[0], 0xFFFFFFFF, 40, 40, 320, 170);
+	Draw("Verification: type these letters", 70, 52, 0.6, 0.6, DEFAULT_TEXT_COLOR);
+	thumbnail_draw(cc_captcha_handle, 85, 90, 230, 92);
+}
+
 
 void Channel_init(void) {
 	logger.info("channel/init", "Initializing...");
@@ -210,6 +327,7 @@ void Channel_init(void) {
 	        }
         });
     info_view = (new VerticalListView(0, 0, 320));
+    cc_dialog = new OverlayDialogView(0, 0, 320, 240);
     hidden_streams_tab_view =
         (new VerticalListView(0, 0, 320))
             ->set_views({(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({streams_sort_selector}),
@@ -223,13 +341,35 @@ void Channel_init(void) {
             ->set_tab_font_size(0.4)
             ->set_tab_texts<std::function<std::string()>>(
                 {[]() { return LOCALIZED(VIDEOS); }, []() { return LOCALIZED(PLAYLISTS); },
-                 []() { return LOCALIZED(INFO); }})
+                 []() { return std::string("Comments"); }, []() { return LOCALIZED(INFO); }})
             ->set_views(
                 {(new VerticalListView(0, 0, 320))
                      ->set_views(
                          {(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({video_sort_selector}),
                           (new RuleView(0, 0, 320, 2)), video_list_view, video_load_more_view}),
                  (new EmptyView(0, 0, 320, 0)),
+                 (new VerticalListView(0, 0, 320))
+                     ->set_views({(new EmptyView(0, 0, 320, SMALL_MARGIN)),
+                                  (new TextView(SMALL_MARGIN * 2, 0, 320 - SMALL_MARGIN * 4, 20))
+                                      ->set_text((std::function<std::string()>)[]() -> std::string {
+	                                      return kamtape_logged_in() ? "Write a comment" : "Log in (Settings) to comment";
+                                      })
+                                      ->set_x_alignment(TextView::XAlign::CENTER)
+                                      ->set_text_offset(0, 1)
+                                      ->set_rounded(true)
+                                      ->set_get_background_color([](const View &view) -> u32 {
+	                                      if (cc_state != CC_IDLE || !kamtape_logged_in()) {
+		                                      return LIGHT1_BACK_COLOR;
+	                                      }
+	                                      return view.touch_darkness > 0 ? View::STANDARD_BACKGROUND(view) : (u32)BUTTON_COLOR;
+                                      })
+                                      ->set_on_view_released([](View &) { cc_start(); }),
+                                  (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))
+                                      ->set_text((std::function<std::string()>)[]() -> std::string { return cc_status; })
+                                      ->set_x_alignment(TextView::XAlign::CENTER)
+                                      ->set_get_text_color([]() { return LIGHT1_TEXT_COLOR; }),
+                                  (new EmptyView(0, 0, 320, SMALL_MARGIN)), community_post_list_view,
+                                  community_post_load_more_view}),
                  info_view});
     Channel_resume("");
     already_init = true;
@@ -517,8 +657,20 @@ void Channel_init(void) {
 	    channel_view->set_name(channel_info.name)
 	        ->set_handle(channel_info.handle)
 	        ->set_subscriber_count(channel_info.subscriber_count_str)
+	        ->set_get_hide_subscribe([]() { return kamtape_is_me(channel_info.id); })
 	        ->set_on_subscribe_button_released([](const ChannelView &view) {
 		        bool cur_subscribed = subscription_is_subscribed(channel_info.id);
+		        if (kamtape_is_me(channel_info.id)) {
+			        return; // no subscribing to yourself
+		        }
+		        if (kamtape_logged_in()) { // the account's subscriptions are kept on Kamtape
+			        std::string err = cur_subscribed ? kamtape_unsubscribe(channel_info.id) : kamtape_subscribe(channel_info.id);
+			        if (!err.empty()) {
+				        Util_err_set_error_message("Subscription", err, "channel");
+				        Util_err_set_error_show_flag(true);
+				        return;
+			        }
+		        }
 		        if (cur_subscribed) {
 			        subscription_unsubscribe(channel_info.id);
 		        } else {
@@ -1009,6 +1161,7 @@ void Channel_init(void) {
 	    Util_hid_query_key_state(&key);
 
 	    thumbnail_set_active_scene(SceneType::CHANNEL);
+	    cc_update();
 
 	    bool video_playing_bar_show = video_is_playing();
 	    VIDEO_LIST_Y_HIGH = video_playing_bar_show ? 240 - VIDEO_PLAYING_BAR_HEIGHT : 240;
@@ -1018,12 +1171,14 @@ void Channel_init(void) {
 		    var_need_refresh = false;
 		    Draw_frame_ready();
 		    video_draw_top_screen();
+		    cc_draw_top_screen();
 
 		    Draw_screen_ready(2, DEFAULT_BACK_COLOR);
 
 		    resource_lock.lock();
 		    main_view->draw();
 		    resource_lock.unlock();
+		    cc_dialog->draw();
 
 		    if (video_playing_bar_show) {
 			    video_draw_playing_bar();
@@ -1051,6 +1206,11 @@ void Channel_init(void) {
 	    } else if (Util_expl_query_show_flag()) {
 		    Util_expl_main(key);
 	    } else {
+		    if (cc_dialog->is_visible) {
+			    cc_dialog->update(key);
+			    key.touch_x = key.touch_y = -1;
+			    key.p_touch = false;
+		    }
 		    update_overlay_menu(&key);
 
 		    resource_lock.lock();
