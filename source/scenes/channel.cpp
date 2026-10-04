@@ -102,6 +102,7 @@ enum { CC_IDLE, CC_FETCHING, CC_ENTER_CODE, CC_POSTING };
 static volatile int cc_state = CC_IDLE;
 static std::string cc_text, cc_user, cc_status;
 static int cc_captcha_handle = -1;
+static time_t cc_fetch_start = 0;
 static OverlayDialogView *cc_dialog = NULL;
 struct CcJob {
 	std::string user, text, code;
@@ -151,6 +152,7 @@ static void cc_start() {
 	cc_user = channel_info.id;
 	cc_captcha_handle = thumbnail_request(kamtape_new_captcha_url(), SceneType::CHANNEL, PRIORITY_FOREGROUND, ThumbnailType::DEFAULT);
 	cc_state = CC_FETCHING;
+	cc_fetch_start = time(NULL);
 	cc_status = "Loading the verification picture...";
 }
 // called every frame: moves the commenting steps along
@@ -194,8 +196,10 @@ static void cc_update() {
 		});
 		cc_dialog->set_is_visible(true);
 	} else {
+		// -2 means "not tried yet"; only real errors (or a long wait) count as a failure
 		int status = thumbnail_get_status_code(cc_captcha_handle);
-		if (status != 0 && status / 100 != 2) {
+		bool failed = status == -1 || status >= 300 || time(NULL) - cc_fetch_start > 30;
+		if (failed) {
 			cc_status = "Couldn't load the verification picture.";
 			cc_reset();
 		}
