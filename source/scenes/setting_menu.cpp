@@ -18,6 +18,7 @@
 #include "network_decoder/network_io.hpp"
 #include "rapidjson_wrapper.hpp"
 #include "oauth/oauth.hpp"
+#include "util/async_task.hpp"
 
 struct SectionTitleWithInfoView : public FixedSizeView {
 	UI::FlexibleString<SectionTitleWithInfoView> title_text;
@@ -79,6 +80,10 @@ namespace Settings {
 	ProgressBarView *update_progress_bar_view;
 	VerticalListView *release_notes_view;
 	
+	// Kamtape login state (the login runs on the async task thread)
+	bool account_busy = false;
+	std::string account_message, account_user_input, account_pass_input;
+
 	// OAuth state
 	bool oauth_check_timer_active = false;
 	int oauth_check_frames = 0;
@@ -316,6 +321,14 @@ static void update_worker_thread_func(void *) {
 	
 	logger.info("updater", "Thread exit.");
 	threadExit(0);
+}
+
+static void kamtape_login_task(void *) {
+	std::string err = kamtape_login(account_user_input, account_pass_input);
+	account_pass_input.clear();
+	account_message = err;
+	account_busy = false;
+	var_need_refresh = true;
 }
 
 static void oauth_worker_thread_func(void *) {
@@ -845,94 +858,50 @@ void Sem_init(void) {
                             }
                         }),
                     (new EmptyView(0, 0, 320, 10)),
-					// OAuth Settings Section
+					// Kamtape account
 					(new SectionTitleWithInfoView(0, 0, 320, DEFAULT_FONT_INTERVAL + SMALL_MARGIN * 2))
-						->set_title([] (const SectionTitleWithInfoView &) { return LOCALIZED(OAUTH); })
-						->set_info([] (const SectionTitleWithInfoView &) { return LOCALIZED(INFO_OAUTH); })
+						->set_title([] (const SectionTitleWithInfoView &) { return std::string("Kamtape account"); })
+						->set_info([] (const SectionTitleWithInfoView &) { return std::string("Log in with your Kamtape username and password. Only the login session is stored on the SD card, never the password."); })
 						->set_popup_height(85),
 					(new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL + SMALL_MARGIN))
 						->set_text([] () -> std::string {
-							const std::string prefix = LOCALIZED(OAUTH_STATUS) + ": ";
-							switch (OAuth::oauth_state) {
-								case OAuth::OAuthState::NOT_AUTHENTICATED: return prefix + LOCALIZED(OAUTH_NOT_AUTHENTICATED);
-								case OAuth::OAuthState::AUTHENTICATED: return prefix + LOCALIZED(OAUTH_AUTHENTICATED);
-								case OAuth::OAuthState::AUTHENTICATING: return prefix + LOCALIZED(OAUTH_AUTHENTICATING);
-								case OAuth::OAuthState::ERROR: return prefix + LOCALIZED(OAUTH_ERROR);
-								default: return "";
-							}
-						}),
-					(new EmptyView(0, 0, 320, SMALL_MARGIN)),
-					(oauth_user_view = (new SuccinctChannelView(0, 0, 320, 0))
-						->set_name("")
-						->set_auxiliary_lines({})
-						->set_thumbnail_url("")),
+							if (account_busy) return "Logging in...";
+							if (kamtape_logged_in()) return "Logged in as " + kamtape_username();
+							return account_message.empty() ? std::string("Not logged in") : account_message;
+						})
+						->set_get_text_color([] () { return account_busy || !kamtape_logged_in() ? (u32)LIGHT0_TEXT_COLOR : (u32)0xFF2E8B2E; }),
 					(new EmptyView(0, 0, 320, SMALL_MARGIN)),
 					(new TextView(10, 0, 120, DEFAULT_FONT_INTERVAL + SMALL_MARGIN * 2))
-						->set_text([] () {
-							if (OAuth::oauth_state == OAuth::OAuthState::AUTHENTICATED) {
-								return LOCALIZED(OAUTH_LOGOUT);
-							} else if (OAuth::oauth_state == OAuth::OAuthState::ERROR) {
-								return LOCALIZED(RETRY);
-							} else {
-								return LOCALIZED(OAUTH_LOGIN);
-							}
-						})
+						->set_text([] () -> std::string { return kamtape_logged_in() ? "Log out" : "Log in"; })
 						->set_x_alignment(TextView::XAlign::CENTER)
 						->set_text_offset(0, -2)
-						->set_get_background_color([] (const View &view) {
-							if (OAuth::oauth_state == OAuth::OAuthState::AUTHENTICATED) {
-								int red = std::min(0xFF, (int)(0xD0 + 0x30 * view.touch_darkness));
-								int other = (int)(0x30 * (1 - view.touch_darkness));
-								return 0xFF000000 | other << 8 | other << 16 | red;
-							}
-							int blue = std::min(0xFF, (int)(0xB0 + 0x30 * view.touch_darkness));
-							int other = (int)(0x50 + 0x20 * (1 - view.touch_darkness));
-							return 0xFF000000 | blue << 16 | other << 8 | other;
+						->set_rounded(true)
+						->set_get_background_color([] (const View &view) -> u32 {
+							if (account_busy) return LIGHT1_BACK_COLOR;
+							return view.touch_darkness > 0 ? View::STANDARD_BACKGROUND(view) : (u32)BUTTON_COLOR;
 						})
 						->set_on_view_released([] (View &) {
-							if (OAuth::oauth_state == OAuth::OAuthState::AUTHENTICATED) {
-								OAuth::revoke_tokens();
-								var_oauth_enabled = false;
-								misc_tasks_request(TASK_SAVE_SETTINGS);
-
-								if (oauth_user_view) {
-									oauth_user_view->set_name("");
-									oauth_user_view->set_auxiliary_lines({});
-									oauth_user_view->set_thumbnail_url("");
-									oauth_user_view->thumbnail_handle = -1;
-									oauth_user_view->set_height(0);
-								}
-							} else if (OAuth::oauth_state == OAuth::OAuthState::ERROR) {
-								OAuth::refresh_access_token();
-							} else if (OAuth::oauth_state == OAuth::OAuthState::NOT_AUTHENTICATED) {
-								OAuth::start_device_flow();
-								if (OAuth::oauth_state == OAuth::OAuthState::AUTHENTICATING) {
-									auto cancel_auth = [] () {
-										oauth_check_timer_active = false;
-										oauth_timeout_counter = 0;
-										OAuth::revoke_tokens();
-									};
-									
-									std::string message = LOCALIZED(OAUTH_LOGIN_INSTRUCTION) + "\n\n" +
-										std::regex_replace(LOCALIZED(OAUTH_USER_CODE), std::regex("%0"), OAuth::user_code) + "\n" +
-										LOCALIZED(OAUTH_VERIFICATION_URL) + "\n\n" + LOCALIZED(OAUTH_WAITING);
-									
-									popup_view->get_message_view()->set_text_lines(split_string(message, '\n'))->update_y_range(0, 120);
-									popup_view->set_buttons<std::function<std::string ()> >({
-										[] () { return LOCALIZED(CANCEL); }
-									}, [cancel_auth] (OverlayDialogView &, int) {
-										cancel_auth();
-										return true;
-									});
-									popup_view->set_on_cancel([cancel_auth](OverlayView &view) {
-										cancel_auth();
-										view.set_is_visible(false);
-										var_need_refresh = true;
-									});
-									popup_view->set_is_visible(true);
-									oauth_check_timer_active = true;
-									oauth_timeout_counter = oauth_check_frames = 0;
-								}
+							if (account_busy) return;
+							if (kamtape_logged_in()) {
+								kamtape_logout();
+								account_message = "";
+							} else {
+								char user[65] = {0}, pass[129] = {0};
+								SwkbdState kb;
+								swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 64);
+								swkbdSetHintText(&kb, "Kamtape username");
+								swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+								if (swkbdInputText(&kb, user, sizeof(user)) != SWKBD_BUTTON_RIGHT) { var_need_refresh = true; return; }
+								swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 128);
+								swkbdSetHintText(&kb, "Kamtape password");
+								swkbdSetPasswordMode(&kb, SWKBD_PASSWORD_HIDE_DELAY);
+								swkbdSetValidation(&kb, SWKBD_NOTEMPTY, 0, 0);
+								if (swkbdInputText(&kb, pass, sizeof(pass)) != SWKBD_BUTTON_RIGHT) { var_need_refresh = true; return; }
+								account_user_input = user;
+								account_pass_input = pass;
+								account_busy = true;
+								account_message = "";
+								queue_async_task(kamtape_login_task, NULL);
 							}
 							var_need_refresh = true;
 						}),
@@ -975,6 +944,8 @@ void Sem_init(void) {
 	update_worker_thread = threadCreate(update_worker_thread_func, (void*)(""), DEF_STACKSIZE, DEF_THREAD_PRIORITY_LOW, 1, false);
 	oauth_worker_thread = threadCreate(oauth_worker_thread_func, (void*)(""), DEF_STACKSIZE, DEF_THREAD_PRIORITY_LOW, 1, false);
 	
+	kamtape_account_init(); // restore the saved Kamtape login session
+
 	// Initialize OAuth
 	OAuth::init();
 	if (OAuth::is_authenticated()) {

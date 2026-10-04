@@ -52,6 +52,8 @@ static size_t curl_receive_data_callback_func(char *in_ptr, size_t, size_t len, 
 	// Util_log_save("curl", "received : " + std::to_string(len));
 	return len;
 }
+std::string kamtape_cookie_for(const std::string &url); // kamtape.cpp: session cookie for kamtape.com URLs
+
 static size_t curl_receive_headers_callback_func(char *in_ptr, size_t, size_t len, void *user_data) {
 	std::map<std::string, std::string> *out = (std::map<std::string, std::string> *)user_data;
 
@@ -72,7 +74,11 @@ static size_t curl_receive_headers_callback_func(char *in_ptr, size_t, size_t le
 		for (auto &c : header_name) {
 			c = tolower(c);
 		}
-		(*out)[header_name] = header_content;
+		if (header_name == "set-cookie" && out->count(header_name)) {
+			(*out)[header_name] += "\n" + header_content; // several Set-Cookie lines: keep them all
+		} else {
+			(*out)[header_name] = header_content;
+		}
 	}
 	return len;
 }
@@ -150,6 +156,12 @@ void NetworkSessionList::curl_add_request(const HttpRequest &request, NetworkRes
 	struct curl_slist *request_headers_list = NULL;
 	for (auto i : request.headers) {
 		request_headers_list = curl_slist_append(request_headers_list, (i.first + ": " + i.second).c_str());
+	}
+	if (!request.headers.count("Cookie")) {
+		std::string session_cookie = kamtape_cookie_for(request.url);
+		if (!session_cookie.empty()) {
+			request_headers_list = curl_slist_append(request_headers_list, ("Cookie: " + session_cookie).c_str());
+		}
 	}
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, request_headers_list);
 

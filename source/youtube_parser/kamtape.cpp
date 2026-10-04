@@ -2,6 +2,8 @@
 // Uses Kamtape's REST API (https://www.kamtape.com/api2_rest, XML) for videos, details, comments and users, and scrapes
 // the HTML results page for search. Video files: get_video?video_id=ID&webm=1 is MP4, with range support.
 #include <time.h>
+#include <sys/stat.h>
+#include <stdio.h>
 #include <string.h>
 #include <algorithm>
 #include "internal_common.hpp"
@@ -116,6 +118,162 @@ static std::vector<YouTubeVideoSuccinct> parse_api_video_list(const std::string 
 }
 static std::string api_error(const std::string &x) {
 	if (x.find("status=\"fail\"") != std::string::npos) return xml_text(x, "description");
+	return "";
+}
+
+
+static std::string strip_tags(const std::string &in); // defined below (profiles section)
+static std::string trim_ws(std::string s);
+
+// ------------------------------------------------------------------------------------------------ account (login)
+// Login is a plain form (POST /login: username, password). The session lives in cookies, which are kept in memory and
+// saved to <data dir>/account.txt (never the password). The HTTP layer adds them to every kamtape.com request.
+static std::map<std::string, std::string> cookie_jar;
+static std::string logged_username;
+static LightLock account_lock;
+static bool account_lock_inited = false;
+static void account_lock_init() {
+	if (!account_lock_inited) {
+		LightLock_Init(&account_lock);
+		account_lock_inited = true;
+	}
+}
+static std::string account_file() { return "sdmc:" + DEF_MAIN_DIR + "account.txt"; }
+
+std::string kamtape_cookie_for(const std::string &url) {
+	if (url.find("kamtape.com") == std::string::npos) return "";
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	std::string res;
+	for (auto &c : cookie_jar) res += (res.empty() ? "" : "; ") + c.first + "=" + c.second;
+	LightLock_Unlock(&account_lock);
+	return res;
+}
+// takes the Set-Cookie lines of a response into the jar (the caller holds no lock)
+static void absorb_cookies(NetworkResult &r) {
+	std::string all = r.get_header("set-cookie");
+	size_t pos = 0;
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	while (pos < all.size()) {
+		size_t nl = all.find('\n', pos);
+		std::string line = all.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+		pos = nl == std::string::npos ? all.size() : nl + 1;
+		std::string pair = line.substr(0, line.find(';'));
+		size_t eq = pair.find('=');
+		if (eq == std::string::npos || eq == 0) continue;
+		std::string name = pair.substr(0, eq), value = pair.substr(eq + 1);
+		if (value.empty() || value == "deleted") cookie_jar.erase(name);
+		else cookie_jar[name] = value;
+	}
+	LightLock_Unlock(&account_lock);
+}
+static void save_account() {
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	std::string out = logged_username + "\n";
+	for (auto &c : cookie_jar) out += c.first + "=" + c.second + "\n";
+	LightLock_Unlock(&account_lock);
+	mkdir(("sdmc:" + DEF_MAIN_DIR).c_str(), 0777);
+	if (FILE *f = fopen(account_file().c_str(), "wb")) {
+		fwrite(out.data(), 1, out.size(), f);
+		fclose(f);
+	}
+}
+void kamtape_account_init() {
+	account_lock_init();
+	FILE *f = fopen(account_file().c_str(), "rb");
+	if (!f) return;
+	std::string data;
+	char buf[512];
+	size_t n;
+	while ((n = fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
+	fclose(f);
+	LightLock_Lock(&account_lock);
+	size_t pos = 0;
+	bool first = true;
+	while (pos < data.size()) {
+		size_t nl = data.find('\n', pos);
+		std::string line = data.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
+		pos = nl == std::string::npos ? data.size() : nl + 1;
+		if (first) { logged_username = line; first = false; continue; }
+		size_t eq = line.find('=');
+		if (eq != std::string::npos && eq > 0) cookie_jar[line.substr(0, eq)] = line.substr(eq + 1);
+	}
+	if (cookie_jar.empty()) logged_username.clear();
+	LightLock_Unlock(&account_lock);
+}
+bool kamtape_logged_in() {
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	bool in = !logged_username.empty() && !cookie_jar.empty();
+	LightLock_Unlock(&account_lock);
+	return in;
+}
+std::string kamtape_username() {
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	std::string u = logged_username;
+	LightLock_Unlock(&account_lock);
+	return u;
+}
+void kamtape_logout() {
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	cookie_jar.clear();
+	logged_username.clear();
+	LightLock_Unlock(&account_lock);
+	remove(account_file().c_str());
+}
+std::string kamtape_login(const std::string &user, const std::string &pass) {
+	if (user.empty() || pass.empty()) return "Enter a username and a password.";
+	// start from a clean session, like a browser that has just opened the login page
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	cookie_jar.clear();
+	logged_username.clear();
+	LightLock_Unlock(&account_lock);
+
+	auto page = thread_network_session_list.perform(http_get_request(std::string(KT_HOST) + "/login"));
+	if (page.fail) return "Couldn't reach Kamtape.";
+	absorb_cookies(page);
+
+	std::string body = "current_form=loginForm&username=" + url_encode(user) + "&password=" + url_encode(pass) +
+	                   "&remember=1&action_login=Log+In";
+	std::map<std::string, std::string> headers = {{"Content-Type", "application/x-www-form-urlencoded"},
+	                                              {"Referer", std::string(KT_HOST) + "/login"}};
+	auto res = thread_network_session_list.perform(HttpRequest::POST(std::string(KT_HOST) + "/login", headers, body));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	absorb_cookies(res);
+	std::string html(res.data.begin(), res.data.end());
+
+	// a failed login answers with the form again and an error message (e.g. "Please check your username.")
+	size_t eb = html.find("class=\"error");
+	if (eb != std::string::npos) {
+		size_t gt = html.find('>', eb), end = html.find("</div>", eb);
+		if (gt != std::string::npos && end != std::string::npos && end > gt) {
+			std::string msg = trim_ws(html_decode(strip_tags(html.substr(gt + 1, end - gt - 1))));
+			if (!msg.empty()) {
+				kamtape_logout();
+				return msg;
+			}
+		}
+	}
+	if (cookie_jar.empty()) return "Login failed.";
+
+	// the cookies must now give access to the account page (it shows the login form again when they don't)
+	auto check = thread_network_session_list.perform(http_get_request(std::string(KT_HOST) + "/my_account"));
+	if (check.fail) return "Couldn't reach Kamtape.";
+	std::string account_html(check.data.begin(), check.data.end());
+	if (account_html.find("name=\"password\"") != std::string::npos) {
+		kamtape_logout();
+		return "Login failed. Please check your username and password.";
+	}
+	account_lock_init();
+	LightLock_Lock(&account_lock);
+	logged_username = user;
+	LightLock_Unlock(&account_lock);
+	save_account();
 	return "";
 }
 

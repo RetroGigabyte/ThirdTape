@@ -270,6 +270,14 @@ YouTubeHomeResult youtube_load_home_page();
 
 void youtube_change_content_language(std::string language_code);
 
+/* ---------------------------- Kamtape account (kamtape.cpp) ---------------------------- */
+void kamtape_account_init();                     // loads the saved session (call once at start)
+bool kamtape_logged_in();
+std::string kamtape_username();
+// logs in with username + password; returns "" on success, otherwise a message to show the user
+std::string kamtape_login(const std::string &user, const std::string &pass);
+void kamtape_logout();
+
 /* -------------------------------- utils.cpp -------------------------------- */
 std::string youtube_get_video_id_by_url(const std::string &url);
 std::string youtube_get_playlist_id_by_url(const std::string &url);
