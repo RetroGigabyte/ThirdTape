@@ -119,6 +119,43 @@ static std::string api_error(const std::string &x) {
 	return "";
 }
 
+// ------------------------------------------------------------------------------------------------ profile pictures
+// A user's picture is the first image of the profile box on https://www.kamtape.com/user/<name> (a 4:3 thumbnail).
+static std::string kamtape_profile_picture(const std::string &user) {
+	static std::map<std::string, std::string> cache;
+	static LightLock lock;
+	static bool lock_inited = false;
+	if (!lock_inited) {
+		LightLock_Init(&lock);
+		lock_inited = true;
+	}
+	LightLock_Lock(&lock);
+	auto it = cache.find(user);
+	if (it != cache.end()) {
+		std::string cached = it->second;
+		LightLock_Unlock(&lock);
+		return cached;
+	}
+	LightLock_Unlock(&lock);
+
+	std::string icon;
+	auto r = http_get(std::string(KT_HOST) + "/user/" + url_encode(user));
+	if (r.first) {
+		size_t box = r.second.find("id=\"pBox\"");
+		size_t img = box == std::string::npos ? box : r.second.find("<img src=\"", box);
+		if (img != std::string::npos) {
+			img += 10;
+			size_t end = r.second.find('"', img);
+			if (end != std::string::npos) icon = r.second.substr(img, end - img);
+			if (!icon.empty() && icon[0] == '/') icon = std::string(KT_HOST) + icon;
+		}
+	}
+	LightLock_Lock(&lock);
+	cache[user] = icon;
+	LightLock_Unlock(&lock);
+	return icon;
+}
+
 // ------------------------------------------------------------------------------------------------ home
 YouTubeHomeResult youtube_load_home_page() {
 	YouTubeHomeResult res;
@@ -219,6 +256,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	res.description = xml_text(x, "description");
 	res.author.name = xml_text(x, "author");
 	res.author.id = res.author.name;
+	res.author.icon_url = kamtape_profile_picture(res.author.name);
 	res.views_str = views_text(xml_text(x, "view_count"));
 	res.publish_date = time_ago(atoll(xml_text(x, "upload_time").c_str()));
 	res.duration_ms = atoi(xml_text(x, "length_seconds").c_str()) * 1000;
@@ -287,6 +325,7 @@ YouTubeChannelDetail youtube_load_channel_page(std::string url_or_id) {
 	if (!prof.first) { res.error = "Couldn't reach Kamtape: " + prof.second; return res; }
 	if (std::string e = api_error(prof.second); e != "") { res.error = e; return res; }
 	res.name = user;
+	res.icon_url = kamtape_profile_picture(user);
 	res.description = xml_text(prof.second, "about_me");
 	res.subscriber_count_str = xml_text(prof.second, "video_upload_count") + " videos";
 	auto vids = http_get(api_url("kamtape.videos.list_by_user", "user=" + url_encode(user)));

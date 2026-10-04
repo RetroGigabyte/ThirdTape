@@ -33,9 +33,8 @@
 #define TAB_GENERAL 0
 #define TAB_COMMENTS 1
 #define TAB_SUGGESTIONS 2
-#define TAB_CAPTIONS 3
-#define TAB_PLAYBACK 4
-#define TAB_PLAYLIST 5
+#define TAB_PLAYBACK 3
+#define TAB_PLAYLIST 4
 
 #define TAB_MAX_NUM 6
 
@@ -226,7 +225,7 @@ void VideoPlayer_init(void) {
 					Draw_texture(var_square_image[0], a << 24 | b << 16 | g << 8 | r, xl, y, xr - xl, SMALL_MARGIN);
 				}
 				float head_x = 5 + bar_len * cur_pos;
-				Draw_texture(var_square_image[0], DEF_DRAW_RED, head_x - 1, y, SMALL_MARGIN, SMALL_MARGIN);
+				Draw_texture(var_square_image[0], 0xFF006400, head_x - 1, y, SMALL_MARGIN, SMALL_MARGIN);
 			}
 			y += SMALL_MARGIN;
 		}
@@ -348,23 +347,6 @@ debug_info_view =
 	}
 	                 }),
 	             video_quality_selector_view,
-				 video_3d_selector_view = (new SelectorView(0, 0, 320, 35, true))
-											  ->set_texts({(std::function<std::string()>)[]() { return LOCALIZED(OFF); },
-														   (std::function<std::string()>)[]() { return "Side by Side"; }
-	},
-														  var_3d_mode)
-											  ->set_title([](const SelectorView &) { return "3D"; })
-											  ->set_on_change([](const SelectorView &view) {
-	if (var_3d_mode != view.selected_button) {
-		var_3d_mode = view.selected_button;
-		if (var_3d_mode) {
-			gfxSet3D(true);
-		} else {
-			gfxSetWide(false);
-		}
-		misc_tasks_request(TASK_SAVE_SETTINGS);
-	}
-											  }),
 	             video_loop_view = (new SelectorView(0, 0, 320, 35, true))
 	                                   ->set_texts({(std::function<std::string()>)[]() { return LOCALIZED(OFF); },
 	                                                (std::function<std::string()>)[]() {
@@ -520,12 +502,11 @@ debug_info_view =
         (new TabView(0, 0, 320, 240 - VIDEO_PLAYING_BAR_HEIGHT))
             ->set_stretch_subview(true)
             ->set_tab_font_size(0.4)
-            ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, captions_tab_view, playback_tab_view},
+            ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, playback_tab_view},
                         TAB_GENERAL)
             ->set_tab_texts<std::function<std::string()>>(
                 {[]() { return LOCALIZED(GENERAL); }, []() { return LOCALIZED(SUGGESTIONS); },
-                 []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(CAPTIONS); },
-                 []() { return LOCALIZED(PLAYBACK); }});
+                 []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(PLAYBACK); }});
 
     add_cpu_limit(CPU_LIMIT);
     if (var_is_new3ds) {
@@ -1318,21 +1299,20 @@ debug_info_view =
     video_info_cache[url] = tmp_video_info;
     if (cur_video_info.playlist.videos.size()) {
 	    main_view
-	        ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, captions_tab_view, playback_tab_view,
+	        ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, playback_tab_view,
 	                     playlist_tab_view},
 	                    TAB_PLAYLIST)
 	        ->set_tab_texts<std::function<std::string()>>(
 	            {[]() { return LOCALIZED(GENERAL); }, []() { return LOCALIZED(SUGGESTIONS); },
-	             []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(CAPTIONS); },
-	             []() { return LOCALIZED(PLAYBACK); }, []() { return LOCALIZED(PLAYLIST); }});
+	             []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(PLAYBACK); },
+	             []() { return LOCALIZED(PLAYLIST); }});
     } else {
 	    main_view
-	        ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, captions_tab_view, playback_tab_view},
+	        ->set_views({main_tab_view, suggestion_tab_view, comment_tab_view, playback_tab_view},
 	                    TAB_GENERAL)
 	        ->set_tab_texts<std::function<std::string()>>(
 	            {[]() { return LOCALIZED(GENERAL); }, []() { return LOCALIZED(SUGGESTIONS); },
-	             []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(CAPTIONS); },
-	             []() { return LOCALIZED(PLAYBACK); }});
+	             []() { return LOCALIZED(COMMENTS); }, []() { return LOCALIZED(PLAYBACK); }});
     }
 
     thumbnail_cancel_request(main_icon_view->handle);
@@ -1890,9 +1870,9 @@ debug_info_view =
 	         SMALL_FONT_SIZE, DEF_DRAW_WHITE);
 	    Draw_texture(var_square_image[0], DEF_DRAW_LIGHT_GRAY, bar_x_l, y_center - 2, bar_x_r - bar_x_l, 4);
 	    if (vid_duration != 0) {
-		    Draw_texture(var_square_image[0], 0xFF3333D0, bar_x_l, y_center - 2, (bar_x_r - bar_x_l) * vid_progress, 4);
+		    Draw_texture(var_square_image[0], 0xFF006400, bar_x_l, y_center - 2, (bar_x_r - bar_x_l) * vid_progress, 4);
 		    C2D_DrawCircleSolid(bar_x_l + (bar_x_r - bar_x_l) * vid_progress, y_center, 0, bar_grabbed ? 6 : 4,
-		                        0xFF3333D0);
+		                        0xFF006400);
 	    }
     }
     void video_update_playing_bar(Hid_info key) {

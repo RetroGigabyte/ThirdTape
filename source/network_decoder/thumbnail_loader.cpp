@@ -368,6 +368,13 @@ void thumbnail_downloader_thread_func(void *arg) {
 				// channel icon : round
 				// with alpha mask
 				if (info.type == ThumbnailType::ICON) {
+					if (w != h) { // profile pictures can be 4:3: centre-crop to a square so they aren't squashed
+						int side = std::min(w, h), x0 = (w - side) / 2, y0 = (h - side) / 2;
+						for (int i = 0; i < side; i++) {
+							memmove(decoded_data + i * side * 2, decoded_data + ((i + y0) * w + x0) * 2, side * 2);
+						}
+						w = h = side;
+					}
 					u32 *rgba_data = (u32 *)malloc(w * h * 4);
 					if (rgba_data) {
 						float cx = (float)w / 2.0f;
