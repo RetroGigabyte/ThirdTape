@@ -264,6 +264,124 @@ static void start_comment_flow(const std::string &parent_id) {
 	queue_async_task(post_comment_task, job);
 }
 
+// ---- comment voting (needs a Kamtape login): the arrows of a comment's left column
+struct VoteJob {
+	std::string video_id, comment_id;
+	bool up;
+	std::shared_ptr<VoteState> st;
+	int old_vote;
+	std::string old_score;
+	bool old_score_valid;
+};
+static void vote_task(void *arg) {
+	VoteJob *j = (VoteJob *)arg;
+	std::string score;
+	std::string err = kamtape_vote_comment(j->video_id, j->comment_id, j->up, score);
+	if (!err.empty()) { // put the display back as it was
+		j->st->my_vote = j->old_vote;
+		snprintf(j->st->score, sizeof(j->st->score), "%s", j->old_score.c_str());
+		j->st->score_valid = j->old_score_valid;
+		comment_status = err;
+	} else if (!score.empty()) {
+		snprintf(j->st->score, sizeof(j->st->score), "%s", score.c_str());
+		j->st->score_valid = true;
+	}
+	j->st->busy = false;
+	delete j;
+	var_need_refresh = true;
+}
+static void vote_pressed(PostView &view, const std::string &comment_id, bool up) {
+	if (!kamtape_logged_in()) {
+		comment_status = "Log in from Settings to vote.";
+		var_need_refresh = true;
+		return;
+	}
+	if (cur_video_info.id.empty() || comment_id.empty() || view.vote->busy) {
+		return;
+	}
+	int new_vote = up ? 1 : -1, old_vote = view.vote->my_vote;
+	if (new_vote == old_vote) {
+		return;
+	}
+	std::string old_score = view.score_text();
+	int shown = atoi(old_score.c_str()) + (new_vote - old_vote); // optimistic score until the site answers
+	char text[16];
+	snprintf(text, sizeof(text), shown > 0 ? "+%d" : "%d", shown);
+	VoteJob *job = new VoteJob{cur_video_info.id, comment_id, up, view.vote, old_vote, old_score, view.vote->score_valid};
+	view.vote->my_vote = new_vote;
+	view.vote->busy = true;
+	snprintf(view.vote->score, sizeof(view.vote->score), "%s", text);
+	view.vote->score_valid = true;
+	comment_status = "";
+	queue_async_task(vote_task, job);
+}
+
+// ---- rating the video (needs a Kamtape login): tap one of the five stars under the title
+struct RateJob {
+	YouTubeVideoDetail video; // only id and the rating-form fields are filled in
+	int stars;
+	int previous; // this user's earlier rating of the video in this session (0 = none known)
+};
+static volatile bool rate_busy = false;
+static int rate_hold = 0; // star currently pressed (preview)
+static int my_rating = 0;
+static std::string rated_video_id; // video my_rating and rate_message belong to
+static char rate_message[96] = {0};
+static void set_rate_message(const std::string &video_id, const std::string &msg) {
+	snprintf(rate_message, sizeof(rate_message), "%s", msg.c_str());
+	rated_video_id = video_id;
+}
+static void rate_task(void *arg) {
+	RateJob *j = (RateJob *)arg;
+	float avg = -1;
+	int count = -1;
+	std::string err = kamtape_rate_video(j->video, j->stars, avg, count);
+	if (err.empty()) {
+		if (cur_video_info.id == j->video.id) {
+			int old_count = cur_video_info.rating_count;
+			float old_avg = cur_video_info.rating_avg;
+			if (count < 0) { // the answer could not be read: work the new average out ourselves
+				count = j->previous ? old_count : old_count + 1;
+			}
+			if (avg < 0 && count > 0) {
+				float total = old_avg * old_count - (j->previous ? j->previous : 0) + j->stars;
+				avg = total / count;
+			}
+			cur_video_info.rating_count = count;
+			if (avg >= 0) {
+				cur_video_info.rating_avg = avg;
+			}
+		}
+		my_rating = j->stars;
+		set_rate_message(j->video.id, "Thanks for rating!");
+	} else {
+		set_rate_message(j->video.id, err);
+	}
+	delete j;
+	rate_busy = false;
+	var_need_refresh = true;
+}
+static void start_rating(int stars) {
+	if (!kamtape_logged_in()) {
+		set_rate_message(cur_video_info.id, "Log in from Settings to rate.");
+		var_need_refresh = true;
+		return;
+	}
+	if (rate_busy || cur_video_info.id.empty()) {
+		return;
+	}
+	RateJob *job = new RateJob();
+	job->stars = stars;
+	job->previous = rated_video_id == cur_video_info.id ? my_rating : 0;
+	job->video.id = cur_video_info.id;
+	job->video.kt_user_id = cur_video_info.kt_user_id;
+	job->video.kt_session_token = cur_video_info.kt_session_token;
+	job->video.kt_rating_form_count = cur_video_info.kt_rating_form_count;
+	rate_busy = true;
+	set_rate_message(cur_video_info.id, "Rating...");
+	queue_async_task(rate_task, job);
+}
+
 void VideoPlayer_init(void) {
 	logger.info(DEF_SAPP0_INIT_STR, "Initializing...");
 	bool new_3ds = false;
@@ -935,6 +1053,7 @@ debug_info_view =
 	                [comment_index]() { return cur_video_info.comments[comment_index].has_more_replies(); })
 	            ->set_on_author_icon_pressed([author_id](const PostView &view) { channel_id_pressed = author_id; })
 	            ->set_on_reply_pressed([comment_id = comment.id](const PostView &) { start_comment_flow(comment_id); })
+	            ->set_on_vote([comment_id = comment.id](PostView &view, bool up) { vote_pressed(view, comment_id, up); })
 	            ->set_on_load_more_replies_pressed([comment_index](PostView &view) {
 		            queue_async_task(load_more_replies, (void *)comment_index);
 		            view.is_loading_replies = true;
@@ -970,6 +1089,9 @@ debug_info_view =
 		                                  ->set_author_icon_url(cur_reply.author.icon_url)
 		                                  ->set_time_str(cur_reply.publish_date)
 		                                  ->set_upvote_str(cur_reply.upvotes_str)
+		                                  ->set_on_vote([reply_id = cur_reply.id](PostView &view, bool up) {
+			                                  vote_pressed(view, reply_id, up);
+		                                  })
 		                                  ->set_content_lines(cur_reply_lines)
 		                                  ->set_has_more_replies([]() { return false; })
 		                                  ->set_on_author_icon_pressed([reply_author_id](const PostView &view) {
@@ -1083,12 +1205,42 @@ debug_info_view =
 			            ->set_draw([](const CustomView &view) {
 				            float x = view.x0 + SMALL_MARGIN;
 				            float y = view.y0;
-				            x += draw_rating_stars(x, y + 2, cur_video_info.rating_avg) + SMALL_MARGIN * 2;
+				            bool mine = rated_video_id == cur_video_info.id;
+				            // while a star is held the stars preview that rating
+				            x += draw_rating_stars(x, y + 2, rate_hold ? (float)rate_hold : cur_video_info.rating_avg) +
+				                 SMALL_MARGIN * 2;
 				            std::string text = cur_video_info.rating_count > 0
 				                                   ? std::to_string(cur_video_info.rating_count) +
 				                                         (cur_video_info.rating_count == 1 ? " rating" : " ratings")
 				                                   : "No ratings yet";
 				            Draw(text, x, y, 0.5, 0.5, LIGHT0_TEXT_COLOR);
+				            x += Draw_get_width(text + "  ", 0.5);
+				            if (mine && rate_message[0]) {
+					            Draw(rate_message, x, y, 0.45, 0.45, COLOR_ACCENT);
+				            } else if (kamtape_logged_in() && !cur_video_info.kt_session_token.empty()) {
+					            Draw("Tap a star to rate", x, y, 0.45, 0.45, LIGHT1_TEXT_COLOR);
+				            }
+			            })
+			            ->set_update([](CustomView &view, Hid_info key) {
+				            if (!kamtape_logged_in() || !stars_ready || rate_busy || cur_video_info.kt_session_token.empty()) {
+					            rate_hold = 0;
+					            return;
+				            }
+				            float sx = view.x0 + SMALL_MARGIN;
+				            bool inside = key.touch_x >= sx - 2 && key.touch_x < sx + 5 * 12 + 2 && key.touch_y >= view.y0 &&
+				                          key.touch_y < view.y0 + 16;
+				            int star = inside ? std::max(1, std::min(5, (int)((key.touch_x - sx) / 12) + 1)) : 0;
+				            if (star && (key.p_touch || rate_hold)) {
+					            rate_hold = star; // sliding along the stars changes the preview
+				            }
+				            if (key.touch_x == -1 && rate_hold) {
+					            int chosen = rate_hold;
+					            rate_hold = 0;
+					            start_rating(chosen);
+				            }
+				            if (!star) {
+					            rate_hold = 0;
+				            }
 			            }),
 			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; }),
 			        (new HorizontalListView(0, 0, ICON_SIZE)) // author
@@ -1719,6 +1871,7 @@ debug_info_view =
 		            ->set_author_icon_url(cur_reply.author.icon_url)
 		            ->set_time_str(cur_reply.publish_date)
 		            ->set_upvote_str(cur_reply.upvotes_str)
+		            ->set_on_vote([reply_id = cur_reply.id](PostView &view, bool up) { vote_pressed(view, reply_id, up); })
 		            ->set_content_lines(cur_lines)
 		            ->set_has_more_replies([]() { return false; })
 		            ->set_on_author_icon_pressed([author_id](const PostView &view) { channel_id_pressed = author_id; })

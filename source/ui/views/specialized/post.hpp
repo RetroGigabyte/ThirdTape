@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <memory>
 #include <vector>
 #include <string>
 #include "youtube_parser/parser.hpp"
@@ -27,6 +28,14 @@ struct TimestampInfo {
 	TimestampInfo() : line_index(-1), start_pos(-1), end_pos(-1), seconds(-1.0), is_holding(false) {}
 	TimestampInfo(int line, int start, int end, double sec)
 	    : line_index(line), start_pos(start), end_pos(end), seconds(sec), is_holding(false) {}
+};
+
+// State of one comment's vote buttons; shared with the background task that sends the vote.
+struct VoteState {
+	volatile int my_vote = 0; // 1 = voted up, -1 = voted down
+	volatile bool busy = false;
+	volatile bool score_valid = false; // score[] replaces the score the comment was loaded with
+	char score[16] = {0};
 };
 
 struct PostView : public FixedWidthView {
@@ -100,6 +109,12 @@ struct PostView : public FixedWidthView {
 	CallBackFuncType on_reply_pressed_func; // shows a "Reply" link in the header (only while logged in)
 	bool reply_holding = false;
 	CallBackFuncTypeModifiable on_load_more_replies_pressed_func;
+
+	// voting (Kamtape comments only, while logged in): the arrows of the left column are touch targets
+	std::function<void(PostView &, bool up)> on_vote_func;
+	std::shared_ptr<VoteState> vote = std::make_shared<VoteState>();
+	int vote_holding = 0; // 1 = up arrow pressed, 2 = down arrow pressed
+	std::string score_text() const { return vote->score_valid ? std::string(vote->score) : upvote_str; }
 
 	int author_icon_handle = -1;
 	std::string author_icon_url;
@@ -226,6 +241,10 @@ struct PostView : public FixedWidthView {
 	}
 	PostView *set_on_reply_pressed(CallBackFuncType on_reply_pressed_func) {
 		this->on_reply_pressed_func = on_reply_pressed_func;
+		return this;
+	}
+	PostView *set_on_vote(const std::function<void(PostView &, bool up)> &on_vote_func) {
+		this->on_vote_func = on_vote_func;
 		return this;
 	}
 	PostView *set_on_load_more_replies_pressed(CallBackFuncTypeModifiable on_load_more_replies_pressed_func) {

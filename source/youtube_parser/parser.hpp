@@ -88,6 +88,8 @@ struct YouTubeVideoDetail {
 	std::string like_count_str;
 	float rating_avg = 0;  // Kamtape: 5-star rating average (0 if unrated)
 	int rating_count = 0;  // number of ratings
+	std::string kt_user_id, kt_session_token; // Kamtape: fields of the watch page's rating form (needed to rate)
+	int kt_rating_form_count = 0;
 	std::string dislike_count_str;
 	std::string publish_date;
 	std::string views_str;
@@ -286,6 +288,12 @@ std::string kamtape_unsubscribe(const std::string &user);
 // returns "" on success. Runs several requests: call it from a worker thread.
 std::string kamtape_sync_subscriptions();
 bool kamtape_is_me(const std::string &user); // same name as the logged-in user (case-insensitive)
+// rates the video 1-5 stars (POST /rating); "" on success, else a message. new_avg / new_count are filled (else -1)
+// when the answer could be read.
+std::string kamtape_rate_video(const YouTubeVideoDetail &video, int stars, float &new_avg, int &new_count);
+// votes a comment up or down (GET /comment_vote); "" on success, else a message. new_score gets the score text if the
+// answer contained it.
+std::string kamtape_vote_comment(const std::string &video_id, const std::string &comment_id, bool up, std::string &new_score);
 // channel comments: a captcha image URL to show, and the post call (comment max 255 characters)
 std::string kamtape_new_captcha_url();
 std::string kamtape_post_channel_comment(const std::string &user, const std::string &text, const std::string &captcha);

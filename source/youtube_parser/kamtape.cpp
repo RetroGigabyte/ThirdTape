@@ -312,6 +312,85 @@ std::string kamtape_post_comment(const std::string &video_id, const std::string 
 	return "Couldn't post the comment (" + (code.empty() ? std::string("no answer") : code.substr(0, 20)) + ").";
 }
 
+// ------------------------------------------------------------------------------------------------ rating and voting
+// The watch page of a logged-in user has a hidden form (POST /rating) with per-session fields; they are read when the
+// page loads. Comments are voted with GET /comment_vote?cid=<id> (up) or ...&action_rate_comment=false&cid=<id> (down).
+static std::string input_value(const std::string &region, const std::string &name) {
+	size_t p = region.find("name=\"" + name + "\"");
+	if (p == std::string::npos) return "";
+	size_t tag_end = region.find('>', p);
+	size_t v = region.find("value=\"", p);
+	if (v == std::string::npos || (tag_end != std::string::npos && v > tag_end)) return "";
+	v += 7;
+	return html_decode(region.substr(v, region.find('"', v) - v));
+}
+static void parse_rating_form(const std::string &page, YouTubeVideoDetail &res) {
+	size_t f = page.find("name=\"ratingForm\"");
+	if (f == std::string::npos) return;
+	size_t end = page.find("</form>", f);
+	std::string form = page.substr(f, end == std::string::npos ? std::string::npos : end - f);
+	res.kt_user_id = input_value(form, "user_id");
+	res.kt_session_token = input_value(form, "session_token");
+	res.kt_rating_form_count = atoi(input_value(form, "rating_count").c_str());
+}
+static int count_occurrences(const std::string &s, const std::string &sub) {
+	int n = 0;
+	for (size_t p = s.find(sub); p != std::string::npos; p = s.find(sub, p + sub.size())) n++;
+	return n;
+}
+
+std::string kamtape_rate_video(const YouTubeVideoDetail &v, int stars, float &new_avg, int &new_count) {
+	new_avg = -1;
+	new_count = -1;
+	if (!kamtape_logged_in()) return "Log in from Settings to rate.";
+	if (stars < 1 || stars > 5) return "Bad rating.";
+	if (v.id.empty() || v.kt_session_token.empty() || v.kt_user_id.empty()) return "This video can't be rated.";
+	std::string body = "action_add_rating2=1&rating_count=" + std::to_string(v.kt_rating_form_count) +
+	                   "&video_id=" + url_encode(v.id) + "&user_id=" + url_encode(v.kt_user_id) +
+	                   "&rating=" + std::to_string(stars) + "&size=L&session_token=" + url_encode(v.kt_session_token);
+	std::map<std::string, std::string> headers = {{"Content-Type", "application/x-www-form-urlencoded"},
+	                                              {"Referer", kamtape_video_url(v.id)},
+	                                              {"X-Requested-With", "XMLHttpRequest"}};
+	auto res = thread_network_session_list.perform(HttpRequest::POST(std::string(KT_HOST) + "/rating", headers, body));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	if (res.status_code == 301 || res.status_code == 302 || res.status_code == 303 || res.status_code == 401 || res.status_code == 403)
+		return "Your login has expired. Please log in again.";
+	if (!res.status_code_is_success()) return "Kamtape refused the rating (" + std::to_string(res.status_code) + ").";
+	// (the answer always contains a hidden "Login to rate" line, so it says nothing about the login state)
+	std::string ans(res.data.begin(), res.data.end());
+	// the answer is the new rating box: star images (full / half / empty) and "<n> ratings"
+	int full = count_occurrences(ans, "icn_star_full"), half = count_occurrences(ans, "icn_star_half");
+	int empty = count_occurrences(ans, "icn_star_empty");
+	if (full + half + empty == 5) new_avg = full + half * 0.5f;
+	size_t rp = ans.find(" rating");
+	if (rp != std::string::npos) {
+		size_t b = rp;
+		while (b > 0 && ans[b - 1] >= '0' && ans[b - 1] <= '9') b--;
+		if (b < rp) new_count = atoi(ans.substr(b, rp - b).c_str());
+	}
+	return "";
+}
+
+std::string kamtape_vote_comment(const std::string &video_id, const std::string &comment_id, bool up, std::string &new_score) {
+	new_score.clear();
+	if (!kamtape_logged_in()) return "Log in from Settings to vote.";
+	if (comment_id.empty()) return "This comment can't be voted on.";
+	std::string url = std::string(KT_HOST) + "/comment_vote?" + (up ? "" : "action_rate_comment=false&") + "cid=" + url_encode(comment_id);
+	std::map<std::string, std::string> headers = {{"Referer", kamtape_video_url(video_id)}, {"X-Requested-With", "XMLHttpRequest"}};
+	auto res = thread_network_session_list.perform(HttpRequest::GET(url, headers));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	if (!res.status_code_is_success()) return "The vote failed (" + std::to_string(res.status_code) + ").";
+	std::string ans = html_decode(std::string(res.data.begin(), res.data.end()));
+	size_t sp = ans.find("comment_score_" + comment_id);
+	if (sp != std::string::npos && (sp = ans.find('>', sp)) != std::string::npos) {
+		size_t e = ans.find('<', sp);
+		if (e != std::string::npos) new_score = trim_ws(ans.substr(sp + 1, e - sp - 1));
+	}
+	if (new_score.empty() && (ans.find("Please login") != std::string::npos || ans.find("/signup") != std::string::npos))
+		return "Your login has expired. Please log in again.";
+	return "";
+}
+
 // ------------------------------------------------------------------------------------------------ profiles (scraped)
 // The API returns an empty profile text, so everything comes from https://www.kamtape.com/profile?user=<name>:
 // the picture (first image of the profile box, a 4:3 thumbnail), the bio, the labelled fields and the counters.
@@ -763,6 +842,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 		auto wp = http_get(kamtape_video_url(id));
 		if (wp.first) {
 			res.comments = parse_comments_html(wp.second);
+			parse_rating_form(wp.second, res);
 			if (wp.second.find("comment_servlet?all_comments") != std::string::npos) res.comment_continue_type = 0;
 		}
 	}

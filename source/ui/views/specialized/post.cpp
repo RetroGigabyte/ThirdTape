@@ -17,12 +17,15 @@ void PostView::cancel_all_thumbnail_requests() {
 // up arrow, score (green > 0, red < 0, gray = 0) and down arrow; voting needs a Kamtape login, so this is display only
 void PostView::draw_vote_column(float x, float y) const {
 	const float w = 26;
-	const u32 arrow = 0xFFA0A0A0;
-	u32 color = upvote_str[0] == '+' ? 0xFF2E8B2E : upvote_str[0] == '-' ? 0xFF3030D0 : LIGHT1_TEXT_COLOR;
+	const u32 gray = 0xFFA0A0A0;
+	std::string score = score_text();
+	u32 color = score[0] == '+' ? 0xFF2E8B2E : score[0] == '-' ? 0xFF3030D0 : LIGHT1_TEXT_COLOR;
+	u32 up_color = vote->my_vote > 0 ? 0xFF2E8B2E : vote_holding == 1 ? (u32)0xFF606060 : gray;
+	u32 down_color = vote->my_vote < 0 ? 0xFF3030D0 : vote_holding == 2 ? (u32)0xFF606060 : gray;
 	float cx = x + w / 2;
-	C2D_DrawTriangle(cx, y + 1, arrow, cx - 6, y + 8, arrow, cx + 6, y + 8, arrow, 0);
-	Draw_x_centered(upvote_str, x, x + w, y + 8, 0.45, 0.45, color);
-	C2D_DrawTriangle(cx - 6, y + 22, arrow, cx + 6, y + 22, arrow, cx, y + 29, arrow, 0);
+	C2D_DrawTriangle(cx, y + 1, up_color, cx - 6, y + 8, up_color, cx + 6, y + 8, up_color, 0);
+	Draw_x_centered(score, x, x + w, y + 8, 0.45, 0.45, color);
+	C2D_DrawTriangle(cx - 6, y + 22, down_color, cx + 6, y + 22, down_color, cx, y + 29, down_color, 0);
 }
 bool PostView::reply_link_visible() const { return on_reply_pressed_func && !is_reply && !is_description_mode && kamtape_logged_in(); }
 float PostView::reply_link_x() const { return x1 - SMALL_MARGIN * 3 - Draw_get_width("Reply", 0.5); }
@@ -131,7 +134,26 @@ void PostView::update_(Hid_info key) {
 	int cur_y = y0;
 
 	if (!is_description_mode) {
-		bool inside_author_icon = false; // the left column is the (display-only) vote column
+		bool vote_active = on_vote_func && !upvote_str.empty() && kamtape_logged_in();
+		float vote_x = x0 + SMALL_MARGIN;
+		bool in_vote_column = vote_active && key.touch_x >= vote_x - 2 && key.touch_x < vote_x + 30 &&
+		                      key.touch_y >= cur_y && key.touch_y < cur_y + 30;
+		int vote_zone = !in_vote_column ? 0 : key.touch_y < cur_y + 15 ? 1 : 2;
+		if (key.p_touch && vote_zone) {
+			vote_holding = vote_zone;
+		}
+		if (key.touch_x == -1 && vote_holding) {
+			int zone = vote_holding;
+			vote_holding = 0;
+			if (!vote->busy) {
+				on_vote_func(*this, zone == 1);
+			}
+		}
+		if (!vote_zone) {
+			vote_holding = 0;
+		}
+
+		bool inside_author_icon = false;
 		bool inside_reply = reply_link_visible() && key.touch_x >= reply_link_x() - 6 && key.touch_x < x1 &&
 		                    key.touch_y >= cur_y - 3 && key.touch_y < cur_y + DEFAULT_FONT_INTERVAL + 2;
 		if (key.p_touch && inside_reply) {

@@ -14,7 +14,7 @@ below is what changed since then. Version numbers are not used yet; entries are 
 ## Video page
 - 5-star rating (Kamtape's own star images, partial stars) and the number of ratings, instead of thumbs up/down.
 - Comments with their scores in a Reddit-style up/down column, and nested replies. The first comments load immediately, the
-  rest when you scroll. (Voting is not available yet.)
+  rest when you scroll.
 - Subtitles tab and the 3D option removed (Kamtape has neither).
 - Seek bar, its pointer and the buffering pointer are dark green.
 - Playlists: opening one plays through it, with the playlist tab showing its videos.
@@ -52,3 +52,10 @@ below is what changed since then. Version numbers are not used yet; entries are 
 - Posting a comment on a channel (needs a captcha) does not work yet.
 - Confirmed working on a New 3DS XL. Not tested on an old 3DS/2DS, which has no hardware video decoder (software decoding only).
 - Voting on comments, rating videos, favorites and uploading are not implemented.
+
+## Rating and voting
+- Rate a video: while logged in, tap one of the five stars under the title (hold and slide to preview). The rating count and
+  average update afterwards.
+- Vote on comments and replies: while logged in, the up and down arrows next to a comment's score are tappable. The score
+  changes at once and goes back if the vote fails.
+- Not yet confirmed against the live site on a real console.
