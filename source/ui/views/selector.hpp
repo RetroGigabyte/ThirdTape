@@ -106,16 +106,12 @@ struct SelectorView : public FixedSizeView {
 			Draw("ⓘ", info_x, y0, 0.45, 0.5, 0xFFFF9030);
 		}
 
-		if (isBoolean_ && selected_button == 0) {
-			Draw_texture(var_square_image[0], DEF_DRAW_WEAK_RED, button_x_left(selected_button), button_y_pos(),
-			             button_x_size(), button_y_size());
-		} else {
-			Draw_texture(var_square_image[0], DEF_DRAW_WEAK_GREEN, button_x_left(selected_button), button_y_pos(),
-			             button_x_size(), button_y_size());
-		}
 		for (int i = 0; i < button_num; i++) {
+			bool selected = i == selected_button;
+			Draw_button(button_x_left(i), button_y_pos(), button_x_size(), button_y_size(),
+			            selected ? COLOR_ACCENT : BUTTON_COLOR);
 			Draw_x_centered(button_texts[i], button_x_left(i), button_x_right(i), button_y_pos(), 0.5, 0.5,
-			                DEFAULT_TEXT_COLOR);
+			                selected ? (u32)DEF_DRAW_WHITE : DEFAULT_TEXT_COLOR);
 		}
 	}
 	void update_(Hid_info key) override {

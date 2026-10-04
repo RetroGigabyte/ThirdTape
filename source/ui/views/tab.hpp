@@ -69,21 +69,22 @@ struct TabView : public FixedSizeView {
 		}
 		views[selected_tab]->draw(x0, y0);
 
-		Draw_texture(var_square_image[0], LIGHT1_BACK_COLOR, x0, y1 - tab_selector_height, x1 - x0,
+		// System Settings style: flat bar, selected tab in white with an accent line on the edge facing the content
+		float bar_y = y1 - tab_selector_height;
+		Draw_texture(var_square_image[0], TAB_BAR_COLOR, x0, bar_y, x1 - x0, tab_selector_height);
+		for (int i = 1; i < tab_num; i++) {
+			Draw_texture(var_square_image[0], TAB_BORDER_COLOR, tab_pos_x(i), bar_y + 3, 1, tab_selector_height - 6);
+		}
+		Draw_texture(var_square_image[0], TAB_SELECTED_COLOR, tab_pos_x(selected_tab), bar_y, tab_width(),
 		             tab_selector_height);
-		Draw_texture(var_square_image[0], LIGHT2_BACK_COLOR, tab_pos_x(selected_tab), y1 - tab_selector_height,
-		             tab_width(), tab_selector_height);
-		Draw_texture(var_square_image[0], LIGHT3_BACK_COLOR, tab_pos_x(selected_tab), y1 - tab_selector_height,
-		             tab_width(), tab_selector_selected_line_height);
+		Draw_texture(var_square_image[0], TAB_BORDER_COLOR, x0, bar_y, x1 - x0, 1);
+		Draw_texture(var_square_image[0], COLOR_ACCENT, tab_pos_x(selected_tab), bar_y, tab_width(),
+		             tab_selector_selected_line_height);
 		for (int i = 0; i < tab_num; i++) {
-			float y = y1 - tab_selector_height + (tab_selector_height - Draw_get_height(tab_texts[i], 0.5)) / 2;
-			if (i == selected_tab) {
-				y -= 2;
-			} else {
-				y -= 3;
-			}
+			float y = bar_y + (tab_selector_height - Draw_get_height(tab_texts[i], 0.5)) / 2;
+			y += i == selected_tab ? 0 : -1;
 			Draw_x_centered(tab_texts[i], tab_pos_x(i), tab_pos_x(i + 1), y, tab_font_size, tab_font_size,
-			                DEFAULT_TEXT_COLOR);
+			                i == selected_tab ? TAB_TEXT_SELECTED_COLOR : TAB_TEXT_COLOR);
 		}
 	}
 	void update_(Hid_info key) override {

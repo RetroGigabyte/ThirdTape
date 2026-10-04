@@ -5,7 +5,7 @@
 // simple horizontal line
 struct RuleView : public FixedSizeView {
   private:
-	std::function<u32()> get_color = []() { return DEFAULT_TEXT_COLOR; };
+	std::function<u32()> get_color = []() { return TAB_BORDER_COLOR; };
 	int margin = SMALL_MARGIN;
 	bool is_vertical = false;
 

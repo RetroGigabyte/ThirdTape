@@ -67,19 +67,20 @@ struct Tab2View : public FixedWidthView {
 
 		views[selected_tab]->draw(x0, y0 + tab_selector_height);
 
-		Draw_texture(var_square_image[0], LIGHT1_BACK_COLOR, x0, y0, x1 - x0, tab_selector_height);
-		Draw_texture(var_square_image[0], LIGHT2_BACK_COLOR, tab_pos_x(selected_tab), y0, tab_width(),
+		Draw_texture(var_square_image[0], TAB_BAR_COLOR, x0, y0, x1 - x0, tab_selector_height);
+		for (int i = 1; i < tab_num; i++) {
+			Draw_texture(var_square_image[0], TAB_BORDER_COLOR, tab_pos_x(i), y0 + 3, 1, tab_selector_height - 6);
+		}
+		Draw_texture(var_square_image[0], TAB_SELECTED_COLOR, tab_pos_x(selected_tab), y0, tab_width(),
 		             tab_selector_height);
-		Draw_texture(var_square_image[0], LIGHT3_BACK_COLOR, tab_pos_x(selected_tab), y0, tab_width(),
-		             tab_selector_selected_line_height);
+		Draw_texture(var_square_image[0], TAB_BORDER_COLOR, x0, y0 + tab_selector_height - 1, x1 - x0, 1);
+		Draw_texture(var_square_image[0], COLOR_ACCENT, tab_pos_x(selected_tab), y0 + tab_selector_height - 3,
+		             tab_width(), tab_selector_selected_line_height);
 		for (int i = 0; i < tab_num; i++) {
 			float y = y0 + (tab_selector_height - Draw_get_height(tab_texts[i], tab_font_size)) / 2;
-			if (i == selected_tab) {
-				y -= 2;
-			} else {
-				y -= 3;
-			}
-			Draw_x_centered(tab_texts[i], tab_pos_x(i), tab_pos_x(i + 1), y, tab_font_size, tab_font_size, DEFAULT_TEXT_COLOR);
+			y += i == selected_tab ? -1 : -2;
+			Draw_x_centered(tab_texts[i], tab_pos_x(i), tab_pos_x(i + 1), y, tab_font_size, tab_font_size,
+			                i == selected_tab ? TAB_TEXT_SELECTED_COLOR : TAB_TEXT_COLOR);
 		}
 	}
 	void update_(Hid_info key) override {

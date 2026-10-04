@@ -78,13 +78,13 @@ struct ChannelView : public FixedSizeView {
 			}
 
 			bool is_subscribed = get_is_subscribed();
-			u32 subscribe_button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF40B040;
+			u32 subscribe_button_color = is_subscribed ? (u32)BUTTON_COLOR : 0xFF40B040;
 			std::string subscribe_button_str = is_subscribed ? LOCALIZED(SUBSCRIBED) : LOCALIZED(SUBSCRIBE);
 			float button_x = x1 - SMALL_MARGIN * 2 - SUBSCRIBE_BUTTON_WIDTH;
 			float button_y = y0 + SMALL_MARGIN + CHANNEL_ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT - SMALL_MARGIN;
-			Draw_texture(var_square_image[0], subscribe_button_color, button_x, button_y, SUBSCRIBE_BUTTON_WIDTH,
-			             SUBSCRIBE_BUTTON_HEIGHT);
-			Draw_x_centered(subscribe_button_str, button_x, x1 - SMALL_MARGIN * 2, button_y + 4, 0.5, 0.5, 0xFF000000);
+			Draw_button(button_x, button_y, SUBSCRIBE_BUTTON_WIDTH, SUBSCRIBE_BUTTON_HEIGHT, subscribe_button_color);
+			Draw_x_centered(subscribe_button_str, button_x, x1 - SMALL_MARGIN * 2, button_y + 4, 0.5, 0.5,
+			                is_subscribed ? (u32)DEFAULT_TEXT_COLOR : (u32)DEF_DRAW_WHITE);
 		}
 	}
 	void update_(Hid_info key) override {

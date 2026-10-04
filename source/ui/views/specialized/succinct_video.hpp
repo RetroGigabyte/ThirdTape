@@ -53,6 +53,10 @@ struct SuccinctVideoView : public FixedSizeView {
 	float get_title_width() const { return x1 - x0 - (get_thumbnail_width() + 3); }
 
 	void draw_() const override {
+		// System Settings style row: bordered thumbnail, thin separator line below
+		Draw_texture(var_square_image[0], TAB_BORDER_COLOR, x0 - 1, y0 - 1, get_thumbnail_width() + 2,
+		             get_thumbnail_height() + 2);
+		Draw_texture(var_square_image[0], SEPARATOR_COLOR, x0, y1 + 1, x1 - x0, 1);
 		thumbnail_draw(thumbnail_handle, x0, y0, get_thumbnail_width(), get_thumbnail_height());
 		if (bottom_right_overlay.size()) {
 			float overlay_width = Draw_get_width(bottom_right_overlay, DURATION_FONT_SIZE);

@@ -548,6 +548,29 @@ void Draw_bot_ui(void) {
 	Draw("▽", 155.0, 220.0, 0.75, 0.75, DEF_DRAW_WHITE);
 }
 
+static u32 shade_color(u32 c, float f) { // f < 1 darkens, f > 1 lightens (alpha kept)
+	auto ch = [&](int shift) {
+		float v = ((c >> shift) & 0xFF) * f;
+		return (u32)(v > 255 ? 255 : v < 0 ? 0 : v) << shift;
+	};
+	return (c & 0xFF000000) | ch(0) | ch(8) | ch(16);
+}
+void Draw_round_rect(float x, float y, float w, float h, float r, u32 color) {
+	r = std::min(r, std::min(w, h) / 2);
+	C2D_DrawRectSolid(x + r, y, 0, w - 2 * r, h, color);
+	C2D_DrawRectSolid(x, y + r, 0, r, h - 2 * r, color);
+	C2D_DrawRectSolid(x + w - r, y + r, 0, r, h - 2 * r, color);
+	C2D_DrawCircleSolid(x + r, y + r, 0, r, color);
+	C2D_DrawCircleSolid(x + w - r, y + r, 0, r, color);
+	C2D_DrawCircleSolid(x + r, y + h - r, 0, r, color);
+	C2D_DrawCircleSolid(x + w - r, y + h - r, 0, r, color);
+}
+void Draw_button(float x, float y, float w, float h, u32 fill) {
+	Draw_round_rect(x, y, w, h, 5, shade_color(fill, 0.72f));      // border
+	Draw_round_rect(x + 1, y + 1, w - 2, h - 2, 4, fill);          // body
+	C2D_DrawRectSolid(x + 4, y + 1, 0, w - 8, 1, shade_color(fill, 1.12f)); // top highlight
+}
+
 void Draw_texture(C2D_Image image, float x, float y, float x_size, float y_size) {
 	Draw_texture(image, DEF_DRAW_NO_COLOR, x, y, x_size, y_size);
 }

@@ -368,8 +368,9 @@ debug_info_view =
 	                 ->set_text((std::function<std::string()>)[]() {
 	return LOCALIZED(RELOAD); })
 	                 ->set_x_alignment(TextView::XAlign::CENTER)
-	                 ->set_get_background_color([](const View &) {
-	return is_async_task_running(load_video_page) ? DEF_DRAW_LIGHT_GRAY : DEF_DRAW_WEAK_GREEN;
+	                 ->set_rounded(true)
+	                 ->set_get_background_color([](const View &) -> u32 {
+	return is_async_task_running(load_video_page) ? (u32)LIGHT1_BACK_COLOR : (u32)BUTTON_COLOR;
 	                 })
 	                 ->set_on_view_released([](View &view) {
 	if (!is_async_task_running(load_video_page)) {
@@ -453,8 +454,9 @@ debug_info_view =
 	return LOCALIZED(OPEN_EQUALIZER); })
 	                 ->set_x_alignment(TextView::XAlign::CENTER)
 	                 ->set_text_offset(0, -1)
-	                 ->set_get_background_color([](const View &) {
-	return DEF_DRAW_WEAK_YELLOW; })
+	                 ->set_rounded(true)
+	                 ->set_get_background_color([](const View &) -> u32 {
+	return BUTTON_COLOR; })
 	                 ->set_on_view_released([](View &view) {
 	equalizer_popup_view->set_is_visible(true); }),
 	             (new RuleView(0, 0, 320, SMALL_MARGIN)), debug_info_view
@@ -1019,7 +1021,7 @@ debug_info_view =
 				                                   : "No ratings yet";
 				            Draw(text, x, y, 0.5, 0.5, LIGHT0_TEXT_COLOR);
 			            }),
-			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; }),
+			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; }),
 			        (new HorizontalListView(0, 0, ICON_SIZE)) // author
 			            ->set_views(
 			                {(new EmptyView(0, 0, SMALL_MARGIN, ICON_SIZE)), new_main_icon_view,
@@ -1060,14 +1062,15 @@ debug_info_view =
 			                     : (View *)(new CustomView(0, 0, SUBSCRIBE_BUTTON_WIDTH, ICON_SIZE))
 			                           ->set_draw([author_id](const CustomView &view) {
 				                           bool is_subscribed = subscription_is_subscribed(author_id);
-				                           u32 button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF40B040;
+				                           u32 button_color = is_subscribed ? (u32)BUTTON_COLOR : 0xFF40B040;
 				                           std::string button_text =
 				                               is_subscribed ? LOCALIZED(SUBSCRIBED) : LOCALIZED(SUBSCRIBE);
 				                           float button_y = view.y0 + (ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT) / 2;
-				                           Draw_texture(var_square_image[0], button_color, view.x0, button_y,
-				                                        SUBSCRIBE_BUTTON_WIDTH, SUBSCRIBE_BUTTON_HEIGHT);
+				                           Draw_button(view.x0, button_y, SUBSCRIBE_BUTTON_WIDTH, SUBSCRIBE_BUTTON_HEIGHT,
+				                                       button_color);
 				                           Draw_x_centered(button_text, view.x0, view.x0 + SUBSCRIBE_BUTTON_WIDTH,
-				                                           button_y + 4, 0.5, 0.5, 0xFF000000);
+				                                           button_y + 4, 0.5, 0.5,
+				                                           is_subscribed ? (u32)DEFAULT_TEXT_COLOR : (u32)DEF_DRAW_WHITE);
 			                           })
 			                           ->set_update([author_id](CustomView &view, Hid_info key) {
 				                           float button_y = view.y0 + (ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT) / 2;
@@ -1093,11 +1096,11 @@ debug_info_view =
 					                           var_need_refresh = true;
 				                           }
 			                           })}),
-			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; })};
+			        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; })};
 			    if (tmp_video_info.is_upcoming) {
 				    std::vector<View *> add_views = {
 				        (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))->set_text(tmp_video_info.playability_reason),
-				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; })};
+				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; })};
 				    main_tab_views.insert(main_tab_views.end(), add_views.begin(), add_views.end());
 			    }
 			    {
@@ -1106,7 +1109,8 @@ debug_info_view =
 				        ->set_text((std::function<std::string()>)[]() {
 					        return cur_video_info.id == playing_video_info.id ? LOCALIZED(PLAYING) : LOCALIZED(PLAY);
 				        })
-				        ->set_x_alignment(TextView::XAlign::CENTER);
+				        ->set_x_alignment(TextView::XAlign::CENTER)
+				        ->set_rounded(true);
 				    if (tmp_video_info.is_playable()) {
 					    play_button
 					        ->set_on_view_released([url](View &) {
@@ -1127,7 +1131,10 @@ debug_info_view =
 				    TextView *reload_button = (new TextView(0, 0, 160 - SMALL_MARGIN, 20));
 				    reload_button->set_text((std::function<std::string()>)[]() { return LOCALIZED(RELOAD); })
 				        ->set_x_alignment(TextView::XAlign::CENTER)
-				        ->set_get_background_color(View::STANDARD_BACKGROUND)
+				        ->set_rounded(true)
+				        ->set_get_background_color([](const View &view) -> u32 {
+					        return view.touch_darkness > 0 ? View::STANDARD_BACKGROUND(view) : (u32)BUTTON_COLOR;
+				        })
 				        ->set_on_view_released([url](View &) {
 					        if (!is_async_task_running(load_video_page)) {
 						        send_change_video_request_wo_lock(cur_displaying_url, false, true, true);
@@ -1139,7 +1146,7 @@ debug_info_view =
 				        (new HorizontalListView(0, 0, 20))
 				            ->set_views({(new EmptyView(0, 0, SMALL_MARGIN, 20)), play_button, reload_button}));
 				    main_tab_views.push_back(
-				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; }));
+				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; }));
 			    }
 			    {
 				    std::vector<std::string> description_lines;
@@ -1173,7 +1180,7 @@ debug_info_view =
 
 				    std::vector<View *> add_views = {
 				        description_view,
-				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return DEF_DRAW_GRAY; })};
+				        (new RuleView(0, 0, 320, SMALL_MARGIN * 2))->set_get_color([]() { return TAB_BORDER_COLOR; })};
 				    main_tab_views.insert(main_tab_views.end(), add_views.begin(), add_views.end());
 			    }
 		    }

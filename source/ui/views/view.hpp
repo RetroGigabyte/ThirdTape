@@ -28,6 +28,7 @@ struct View {
 	std::function<u32(const View &)> get_background_color;
 	bool is_visible = true;
 	bool is_touchable = true;
+	bool rounded = false; // draw the background as a System-Settings style button
 	std::vector<std::pair<int, std::function<void(View &view)>>> on_long_holds;
 
 	const static std::function<u32(const View &)> STANDARD_BACKGROUND;
@@ -46,6 +47,10 @@ struct View {
 	}
 	virtual View *set_get_background_color(std::function<u32(const View &)> get_background_color) {
 		this->get_background_color = get_background_color;
+		return this;
+	}
+	virtual View *set_rounded(bool rounded) {
+		this->rounded = rounded;
 		return this;
 	}
 	virtual View *set_is_visible(bool is_visible) {
@@ -80,7 +85,11 @@ struct View {
 	virtual void draw_background() const {
 		u32 color = get_background_color ? get_background_color(*this) : background_color;
 		if (color >> 24) {
-			Draw_texture(var_square_image[0], color, (int)x0, (int)y0, (int)get_width(), (int)get_height());
+			if (rounded) {
+				Draw_button((int)x0, (int)y0, (int)get_width(), (int)get_height(), color);
+			} else {
+				Draw_texture(var_square_image[0], color, (int)x0, (int)y0, (int)get_width(), (int)get_height());
+			}
 		}
 	}
 	void draw() const {

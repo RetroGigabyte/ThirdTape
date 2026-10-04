@@ -41,6 +41,9 @@ void Draw_top_ui(void);
 void Draw_bot_ui(void);
 
 void Draw_texture(C2D_Image image, float x, float y, float x_size, float y_size);
+// opaque rounded rectangle, and a System-Settings style button (border + fill + top highlight)
+void Draw_round_rect(float x, float y, float w, float h, float r, u32 color);
+void Draw_button(float x, float y, float w, float h, u32 fill);
 
 void Draw_texture(C2D_Image image, int abgr8888, float x, float y, float x_size, float y_size);
 
