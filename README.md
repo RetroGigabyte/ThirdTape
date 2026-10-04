@@ -8,12 +8,12 @@ A homebrew [Kamtape](https://www.kamtape.com) client for the Nintendo 3DS: brows
 
 ThirdTape is an unofficial client and is not affiliated with Kamtape. It is based on [FourthTube](https://github.com/erievs/FourthTube) (a YouTube client): the interface, the video player and the streaming downloader come from there, and the YouTube data layer was replaced with one that talks to Kamtape.
 
-> **Status:** work in progress. It has so far been developed and tested in the Azahar emulator; testing on real hardware is ongoing.
+> **Status:** work in progress. Developed in the Azahar emulator and confirmed working on a real 3DS.
 
 ## Features
 - **Home:** the videos featured on Kamtape's front page.
 - **Search:** Kamtape's search with paging ("load more" as you scroll).
-- **Video player:** streams Kamtape's MP4 files (`get_video?video_id=ID&webm=1`) with HTTP range requests, so playback starts before the whole file is downloaded and seeking works. Software decoding everywhere, plus the New 3DS hardware decoder inherited from FourthTube (not yet verified on a real console).
+- **Video player:** streams Kamtape's MP4 files (`get_video?video_id=ID&webm=1`) with HTTP range requests, so playback starts before the whole file is downloaded and seeking works. Software decoding everywhere, plus the New 3DS hardware decoder inherited from FourthTube .
 - **Ratings:** Kamtape's 5-star rating with the number of ratings.
 - **Comments:** with their scores (Reddit-style up/down column) and replies. The first comments load immediately, the rest as you scroll. When logged in you can post comments and reply to comments.
 - **Channels:** profile picture, bio and profile fields, counters, the user's videos, their playlists, and the comments left on the channel (with the commenters' pictures and attached videos). Posting a comment on a channel (Kamtape asks for a captcha) is implemented but currently bugged, so the button is switched off.

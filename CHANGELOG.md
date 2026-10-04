@@ -50,5 +50,5 @@ below is what changed since then. Version numbers are not used yet; entries are 
 
 ## Known issues
 - Posting a comment on a channel (needs a captcha) does not work yet.
-- Tested in the Azahar emulator; real-console testing (especially hardware video decoding) is still open.
+- Confirmed working on a real console; which decoder (hardware or software) is used on each model is still to be written down.
 - Voting on comments, rating videos, favorites and uploading are not implemented.
