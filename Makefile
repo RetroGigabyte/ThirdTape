@@ -59,7 +59,7 @@ PRODUCT_CODE				:= CTR-TTAPE
 UNIQUE_ID				:= 0xB7D10
 
 BANNER_AUDIO				:= resource/banner.wav
-BANNER_IMAGE				:= resource/banner.cgfx
+BANNER_IMAGE				:= resource/banner_legacy.png
 ICON        				:= resource/icon.png
 RSF_PATH				:= resource/app.rsf
 
