@@ -119,10 +119,30 @@ static std::string api_error(const std::string &x) {
 	return "";
 }
 
-// ------------------------------------------------------------------------------------------------ profile pictures
-// A user's picture is the first image of the profile box on https://www.kamtape.com/user/<name> (a 4:3 thumbnail).
-static std::string kamtape_profile_picture(const std::string &user) {
-	static std::map<std::string, std::string> cache;
+// ------------------------------------------------------------------------------------------------ profiles (scraped)
+// The API returns an empty profile text, so everything comes from https://www.kamtape.com/profile?user=<name>:
+// the picture (first image of the profile box, a 4:3 thumbnail), the bio, the labelled fields and the counters.
+static std::string strip_tags(const std::string &in) {
+	std::string out;
+	bool tag = false;
+	for (char c : in) {
+		if (c == '<') tag = true;
+		else if (c == '>') tag = false;
+		else if (!tag) out.push_back(c);
+	}
+	return out;
+}
+static std::string trim_ws(std::string s) {
+	size_t a = s.find_first_not_of(" \t\r\n");
+	if (a == std::string::npos) return "";
+	size_t b = s.find_last_not_of(" \t\r\n");
+	return s.substr(a, b - a + 1);
+}
+struct KtProfile {
+	std::string icon, description, subscribers, views, uploads;
+};
+static KtProfile kamtape_profile(const std::string &user) {
+	static std::map<std::string, KtProfile> cache;
 	static LightLock lock;
 	static bool lock_inited = false;
 	if (!lock_inited) {
@@ -132,29 +152,87 @@ static std::string kamtape_profile_picture(const std::string &user) {
 	LightLock_Lock(&lock);
 	auto it = cache.find(user);
 	if (it != cache.end()) {
-		std::string cached = it->second;
+		KtProfile cached = it->second;
 		LightLock_Unlock(&lock);
 		return cached;
 	}
 	LightLock_Unlock(&lock);
 
-	std::string icon;
-	auto r = http_get(std::string(KT_HOST) + "/user/" + url_encode(user));
+	KtProfile pr;
+	auto r = http_get(std::string(KT_HOST) + "/profile?user=" + url_encode(user));
 	if (r.first) {
-		size_t box = r.second.find("id=\"pBox\"");
-		size_t img = box == std::string::npos ? box : r.second.find("<img src=\"", box);
-		if (img != std::string::npos) {
-			img += 10;
-			size_t end = r.second.find('"', img);
-			if (end != std::string::npos) icon = r.second.substr(img, end - img);
-			if (!icon.empty() && icon[0] == '/') icon = std::string(KT_HOST) + icon;
+		const std::string &h = r.second;
+		size_t box = h.find("id=\"pBox\"");
+		if (box != std::string::npos) {
+			size_t box_end = h.find("end pBox", box);
+			if (box_end == std::string::npos) box_end = h.size();
+			// picture
+			size_t img = h.find("<img src=\"", box);
+			if (img != std::string::npos && img < box_end) {
+				img += 10;
+				size_t end = h.find('"', img);
+				if (end != std::string::npos) pr.icon = h.substr(img, end - img);
+				if (!pr.icon.empty() && pr.icon[0] == '/') pr.icon = std::string(KT_HOST) + pr.icon;
+			}
+			// counters: <span class="smallText">Subscribers:</span> <b>9</b>
+			auto counter = [&](const char *label) {
+				size_t p = h.find(std::string(label) + ":</span>", box);
+				if (p == std::string::npos || p > box_end) return std::string();
+				size_t bs = h.find("<b>", p), be = h.find("</b>", p);
+				if (bs == std::string::npos || be == std::string::npos) return std::string();
+				return trim_ws(html_decode(h.substr(bs + 3, be - bs - 3)));
+			};
+			pr.subscribers = counter("Subscribers");
+			pr.views = counter("Channel Views");
+
+			// description = bio paragraph + the labelled fields
+			std::string text;
+			size_t gender = h.find("Gender: ", box);
+			size_t bio_from = gender != std::string::npos && gender < box_end ? gender : box;
+			size_t bio = h.find("<div class=\"padT3\">", bio_from);
+			if (bio != std::string::npos && bio < box_end) {
+				bio += 20;
+				size_t bio_end = h.find("</div>", bio);
+				if (bio_end != std::string::npos) {
+					std::string raw = h.substr(bio, bio_end - bio);
+					if (raw.find('<') == std::string::npos) text = trim_ws(html_decode(raw));
+				}
+			}
+			std::string fields;
+			static const char *labels[] = {"Name", "Age", "Gender", "Country", "City", "Hometown", "Schools", "Occupations", "Companies",
+			                              "Interests &amp; Hobbies", "Favorite Movies &amp; Shows", "Favorite Music", "Favorite Books"};
+			for (const char *label : labels) {
+				std::string needle = std::string("<span class=\"smallText\">") + label + ": </span>";
+				size_t p = h.find(needle, box);
+				if (p == std::string::npos || p > box_end) continue;
+				size_t vs = h.find("<b>", p), ve = h.find("</b>", p);
+				if (vs == std::string::npos || ve == std::string::npos || vs > p + needle.size() + 20) continue;
+				std::string val = trim_ws(html_decode(strip_tags(h.substr(vs + 3, ve - vs - 3))));
+				if (!val.empty()) fields += html_decode(label) + ": " + val + "\n";
+			}
+			size_t web = h.find("<span class=\"smallText\">Website: </span>", box);
+			if (web != std::string::npos && web < box_end) {
+				size_t hs = h.find("href=\"", web);
+				if (hs != std::string::npos) {
+					hs += 6;
+					fields += "Website: " + html_decode(h.substr(hs, h.find('"', hs) - hs)) + "\n";
+				}
+			}
+			size_t joined = h.find("Joined: <b>", box);
+			if (joined != std::string::npos && joined < box_end) {
+				joined += 11;
+				fields += "Joined: " + trim_ws(h.substr(joined, h.find("</b>", joined) - joined)) + "\n";
+			}
+			pr.description = text;
+			if (!fields.empty()) pr.description += (text.empty() ? "" : "\n\n") + trim_ws(fields);
 		}
 	}
 	LightLock_Lock(&lock);
-	cache[user] = icon;
+	cache[user] = pr;
 	LightLock_Unlock(&lock);
-	return icon;
+	return pr;
 }
+static std::string kamtape_profile_picture(const std::string &user) { return kamtape_profile(user).icon; }
 
 // ------------------------------------------------------------------------------------------------ home
 YouTubeHomeResult youtube_load_home_page() {
@@ -287,6 +365,65 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 		pos = end + 10;
 	}
 
+	// playlist context (the URL carries &list=<playlist id>)
+	std::string list_id = youtube_get_playlist_id_by_url(url);
+	if (!list_id.empty()) {
+		auto pl = http_get(std::string(KT_HOST) + "/view_play_list?p=" + url_encode(list_id));
+		if (pl.first) {
+			const std::string &h = pl.second;
+			res.playlist.id = list_id;
+			res.playlist.selected_index = 0;
+			size_t tp = h.find("<span>Playlist: ");
+			if (tp != std::string::npos) {
+				tp += 16;
+				res.playlist.title = html_decode(h.substr(tp, h.find("</span>", tp) - tp));
+			}
+			size_t pos = 0;
+			while ((pos = h.find("class=\"vDetailEntry\"", pos)) != std::string::npos) {
+				size_t end = h.find("class=\"vDetailEntry\"", pos + 10);
+				if (end == std::string::npos) end = h.size();
+				std::string e = h.substr(pos, end - pos);
+				pos = end;
+				YouTubeVideoSuccinct v;
+				size_t w = e.find("/watch?v=");
+				if (w == std::string::npos) continue;
+				std::string vid = e.substr(w + 9, 11);
+				v.url = std::string(KT_HOST) + "/watch?v=" + vid + "&list=" + list_id;
+				v.thumbnail_url = kamtape_thumbnail_url(vid);
+				size_t t = e.find("class=\"title\"");
+				if (t != std::string::npos) {
+					size_t a = e.find('>', e.find("<a ", t)) + 1, b = e.find("</a>", a);
+					if (b != std::string::npos) v.title = html_decode(e.substr(a, b - a));
+					size_t rt = e.find("class=\"runtime\">", t);
+					if (rt != std::string::npos) {
+						rt += 16;
+						v.duration_text = e.substr(rt, e.find('<', rt) - rt);
+					}
+				}
+				size_t fr = e.find("From:</span> <a href=\"/user/");
+				if (fr != std::string::npos) {
+					fr += 28;
+					v.author = e.substr(fr, e.find('"', fr) - fr);
+				}
+				size_t ad = e.find("Added:</span>");
+				if (ad != std::string::npos) {
+					ad += 13;
+					v.publish_date = trim_ws(e.substr(ad, e.find('<', ad) - ad));
+				}
+				size_t vw = e.find("Views:</span>");
+				if (vw != std::string::npos) {
+					vw += 13;
+					v.views_str = views_text(trim_ws(e.substr(vw, e.find('<', vw) - vw)));
+				}
+				res.playlist.videos.push_back(v);
+				if (vid == id) res.playlist.selected_index = (int)res.playlist.videos.size() - 1;
+			}
+			res.playlist.total_videos = (int)res.playlist.videos.size();
+			if (!res.playlist.videos.empty()) res.playlist.author_name = res.playlist.videos[0].author;
+			if (res.playlist.videos.empty()) res.playlist = YouTubeVideoDetail::Playlist();
+		}
+	}
+
 	// related videos: other videos with the first tag, falling back to the featured list
 	std::string tags = xml_text(x, "tags");
 	std::string first_tag = tags.substr(0, tags.find(' '));
@@ -325,9 +462,14 @@ YouTubeChannelDetail youtube_load_channel_page(std::string url_or_id) {
 	if (!prof.first) { res.error = "Couldn't reach Kamtape: " + prof.second; return res; }
 	if (std::string e = api_error(prof.second); e != "") { res.error = e; return res; }
 	res.name = user;
-	res.icon_url = kamtape_profile_picture(user);
-	res.description = xml_text(prof.second, "about_me");
+	KtProfile pr = kamtape_profile(user);
+	res.icon_url = pr.icon;
+	res.description = pr.description;
 	res.subscriber_count_str = xml_text(prof.second, "video_upload_count") + " videos";
+	if (!pr.subscribers.empty()) res.subscriber_count_str += " \xE2\x80\xA2 " + pr.subscribers + " subscribers";
+	// tells the UI that the Playlists tab can be loaded (see load_playlists())
+	res.playlist_tab_browse_id = user;
+	res.playlist_tab_params = "kamtape";
 	auto vids = http_get(api_url("kamtape.videos.list_by_user", "user=" + url_encode(user)));
 	if (vids.first) res.videos = parse_api_video_list(vids.second);
 	return res;
@@ -346,7 +488,52 @@ std::vector<YouTubeChannelDetail> youtube_load_channel_page_multi(std::vector<st
 void YouTubeChannelDetail::load_more_videos() { videos_continue_token = ""; }
 void YouTubeChannelDetail::load_more_streams() { streams_continue_token = ""; }
 void YouTubeChannelDetail::load_more_shorts() { shorts_continue_token = ""; }
-void YouTubeChannelDetail::load_playlists() {}
+// Playlists of a user: https://www.kamtape.com/profile_play_list?user=<name>
+void YouTubeChannelDetail::load_playlists() {
+	std::string user = playlist_tab_browse_id;
+	playlist_tab_browse_id = "";
+	playlist_tab_params = "";
+	playlists.clear();
+	if (user.empty()) return;
+	auto r = http_get(std::string(KT_HOST) + "/profile_play_list?user=" + url_encode(user));
+	if (!r.first) return;
+	const std::string &h = r.second;
+	std::vector<YouTubePlaylistSuccinct> items;
+	size_t pos = 0;
+	while ((pos = h.find("<table class=\"playlist\"", pos)) != std::string::npos) {
+		// an entry runs until the next one (it contains nested tables for the thumbnail stack)
+		size_t next = h.find("<table class=\"playlist\"", pos + 10);
+		size_t end = next == std::string::npos ? h.size() : next;
+		std::string e = h.substr(pos, end - pos);
+		pos = end;
+		YouTubePlaylistSuccinct pl;
+		size_t pid = e.find("/view_play_list?p=");
+		if (pid == std::string::npos) continue;
+		pid += 18;
+		std::string id = e.substr(pid, e.find('"', pid) - pid);
+		size_t first = e.find("/watch?v=");
+		std::string first_video = first == std::string::npos ? "" : e.substr(first + 9, 11);
+		size_t img = e.find("<img src=\"");
+		if (img != std::string::npos) {
+			img += 10;
+			pl.thumbnail_url = e.substr(img, e.find('"', img) - img);
+		}
+		size_t t = e.find("class=\"title\"");
+		if (t != std::string::npos) {
+			size_t a = e.find('>', e.find("<a ", t)) + 1, b = e.find("</a>", a);
+			if (b != std::string::npos) pl.title = html_decode(e.substr(a, b - a));
+			size_t f = e.find("class=\"facets\">", t);
+			if (f != std::string::npos) {
+				f += 15;
+				pl.video_count_str = trim_ws(e.substr(f, e.find('<', f) - f));
+			}
+		}
+		if (first_video.empty()) continue;
+		pl.url = std::string(KT_HOST) + "/watch?v=" + first_video + "&list=" + id;
+		items.push_back(pl);
+	}
+	if (!items.empty()) playlists.push_back({"Playlists", items});
+}
 void YouTubeChannelDetail::load_more_community_posts() { community_continuation_token = ""; }
 
 void youtube_change_content_language(std::string) {}
