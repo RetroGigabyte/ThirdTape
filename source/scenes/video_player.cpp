@@ -1027,7 +1027,7 @@ debug_info_view =
 			                     : (View *)(new CustomView(0, 0, SUBSCRIBE_BUTTON_WIDTH, ICON_SIZE))
 			                           ->set_draw([author_id](const CustomView &view) {
 				                           bool is_subscribed = subscription_is_subscribed(author_id);
-				                           u32 button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF4040EE;
+				                           u32 button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF40B040;
 				                           std::string button_text =
 				                               is_subscribed ? LOCALIZED(SUBSCRIBED) : LOCALIZED(SUBSCRIBE);
 				                           float button_y = view.y0 + (ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT) / 2;

@@ -78,7 +78,7 @@ struct ChannelView : public FixedSizeView {
 			}
 
 			bool is_subscribed = get_is_subscribed();
-			u32 subscribe_button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF4040EE;
+			u32 subscribe_button_color = is_subscribed ? LIGHT1_BACK_COLOR : 0xFF40B040;
 			std::string subscribe_button_str = is_subscribed ? LOCALIZED(SUBSCRIBED) : LOCALIZED(SUBSCRIBE);
 			float button_x = x1 - SMALL_MARGIN * 2 - SUBSCRIBE_BUTTON_WIDTH;
 			float button_y = y0 + SMALL_MARGIN + CHANNEL_ICON_SIZE - SUBSCRIBE_BUTTON_HEIGHT - SMALL_MARGIN;

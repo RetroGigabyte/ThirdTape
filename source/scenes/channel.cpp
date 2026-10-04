@@ -211,26 +211,14 @@ void Channel_init(void) {
         (new Tab2View(0, 0, 320))
             ->set_tab_font_size(0.4)
             ->set_tab_texts<std::function<std::string()>>(
-                {[]() { return LOCALIZED(VIDEOS); }, []() { return LOCALIZED(STREAMS); },
-                 []() { return LOCALIZED(SHORTS); }, []() { return LOCALIZED(PLAYLISTS); },
-                 []() { return LOCALIZED(COMMUNITY); }, []() { return LOCALIZED(INFO); }})
+                {[]() { return LOCALIZED(VIDEOS); }, []() { return LOCALIZED(PLAYLISTS); },
+                 []() { return LOCALIZED(INFO); }})
             ->set_views(
                 {(new VerticalListView(0, 0, 320))
                      ->set_views(
                          {(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({video_sort_selector}),
                           (new RuleView(0, 0, 320, 2)), video_list_view, video_load_more_view}),
-                 (new VerticalListView(0, 0, 320))
-                     ->set_views(
-                         {(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({streams_sort_selector}),
-                          (new RuleView(0, 0, 320, 2)), stream_list_view, stream_load_more_view}),
-                 (new VerticalListView(0, 0, 320))
-                     ->set_views(
-                         {(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({shorts_sort_selector}),
-                          (new RuleView(0, 0, 320, 2)), shorts_list_view, shorts_load_more_view}),
                  (new EmptyView(0, 0, 320, 0)),
-                 (new VerticalListView(0, 0, 320))
-                     ->set_views({(new EmptyView(0, 0, 320, SMALL_MARGIN)), community_post_list_view,
-                                  community_post_load_more_view}),
                  info_view});
     Channel_resume("");
     already_init = true;
@@ -1182,7 +1170,7 @@ void Channel_init(void) {
 			    video_sort_request = -1;
 		    }
 
-		    if (streams_sort_request != -1 && tab_view && tab_view->selected_tab == 1) {
+		    if (false && streams_sort_request != -1 && tab_view && tab_view->selected_tab == 1) { // tab removed
 			    std::string sort_token;
 			    if (streams_sort_request == 0) {
 				    sort_token = channel_info.streams_sort_token_newest;
@@ -1208,7 +1196,7 @@ void Channel_init(void) {
 			    streams_sort_request = -1;
 		    }
 
-		    if (shorts_sort_request != -1 && tab_view && tab_view->selected_tab == 2) {
+		    if (false && shorts_sort_request != -1 && tab_view && tab_view->selected_tab == 2) { // tab removed
 			    std::string sort_token;
 			    if (shorts_sort_request == 0) {
 				    sort_token = channel_info.shorts_sort_token_newest;
