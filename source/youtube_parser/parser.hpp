@@ -277,6 +277,8 @@ std::string kamtape_username();
 // logs in with username + password; returns "" on success, otherwise a message to show the user
 std::string kamtape_login(const std::string &user, const std::string &pass);
 void kamtape_logout();
+// posts a comment (parent_id empty) or a reply to the comment with that id; returns "" on success, otherwise a message
+std::string kamtape_post_comment(const std::string &video_id, const std::string &parent_id, const std::string &text);
 
 /* -------------------------------- utils.cpp -------------------------------- */
 std::string youtube_get_video_id_by_url(const std::string &url);

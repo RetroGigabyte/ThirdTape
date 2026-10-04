@@ -39,15 +39,8 @@ void load_settings() {
 	auto load_string = [&](std::string key, std::string default_value) {
 		return settings.count(key) ? settings[key] : default_value;
 	};
-	var_lang = load_string("lang_ui", "en");
-	if (var_lang != "en" && var_lang != "ja" && var_lang != "de" && var_lang != "fr" && var_lang != "it") {
-		var_lang = "en";
-	}
-	var_lang_content = load_string("lang_content", "en");
-	if (var_lang_content != "en" && var_lang_content != "ja" && var_lang_content != "de" && var_lang_content != "fr" &&
-	    var_lang_content != "it") {
-		var_lang_content = "en";
-	}
+	var_lang = "en"; // ThirdTape is English only (Kamtape is)
+	var_lang_content = "en";
 	var_lcd_brightness = load_int("lcd_brightness", 100);
 	if (var_lcd_brightness < 15 || var_lcd_brightness > 163) {
 		var_lcd_brightness = 100;

@@ -218,6 +218,52 @@ static float draw_rating_stars(float x, float y, float rating) {
 
 static void convert_thread(void *arg);
 
+// ---- commenting (needs a Kamtape login)
+struct CommentJob {
+	std::string video_id, parent_id, text;
+};
+static volatile bool comment_busy = false;
+static std::string comment_status;
+static void post_comment_task(void *arg) {
+	CommentJob *job = (CommentJob *)arg;
+	std::string err = kamtape_post_comment(job->video_id, job->parent_id, job->text);
+	comment_status = err.empty() ? (job->parent_id.empty() ? "Comment posted!" : "Reply posted!") : err;
+	delete job;
+	comment_busy = false;
+	var_need_refresh = true;
+	if (err.empty() || err.compare(0, 6, "Posted") == 0) {
+		send_change_video_request(cur_displaying_url, false, true, true); // reload the page data: shows the new comment
+	}
+}
+// asks for the text with the system keyboard and posts it (parent_id empty = new comment)
+static void start_comment_flow(const std::string &parent_id) {
+	if (!kamtape_logged_in()) {
+		comment_status = "Log in from Settings to comment.";
+		var_need_refresh = true;
+		return;
+	}
+	if (comment_busy || cur_video_info.id.empty()) {
+		return;
+	}
+	SwkbdState kb;
+	swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 500);
+	swkbdSetFeatures(&kb, SWKBD_MULTILINE | SWKBD_PREDICTIVE_INPUT);
+	swkbdSetHintText(&kb, parent_id.empty() ? "Write a comment" : "Write a reply");
+	swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+	char text[1500] = {0};
+	video_set_skip_drawing(true);
+	SwkbdButton pressed = swkbdInputText(&kb, text, sizeof(text));
+	video_set_skip_drawing(false);
+	var_need_refresh = true;
+	if (pressed != SWKBD_BUTTON_RIGHT) {
+		return;
+	}
+	CommentJob *job = new CommentJob{cur_video_info.id, parent_id, text};
+	comment_busy = true;
+	comment_status = "Posting...";
+	queue_async_task(post_comment_task, job);
+}
+
 void VideoPlayer_init(void) {
 	logger.info(DEF_SAPP0_INIT_STR, "Initializing...");
 	bool new_3ds = false;
@@ -227,6 +273,28 @@ void VideoPlayer_init(void) {
 
 	suggestion_tab_view =
 	    (new ScrollView(0, 0, 320, CONTENT_Y_HIGH))->set_views({suggestion_main_view, suggestion_bottom_view});
+	comments_top_view =
+	    (new VerticalListView(0, 0, 320))
+	        ->set_views({(new EmptyView(0, 0, 320, SMALL_MARGIN)),
+	                     (new TextView(SMALL_MARGIN * 2, 0, 320 - SMALL_MARGIN * 4, 20))
+	                         ->set_text((std::function<std::string()>)[]() -> std::string {
+		                         return kamtape_logged_in() ? "Post a comment" : "Log in (Settings) to comment";
+	                         })
+	                         ->set_x_alignment(TextView::XAlign::CENTER)
+	                         ->set_text_offset(0, 1)
+	                         ->set_rounded(true)
+	                         ->set_get_background_color([](const View &view) -> u32 {
+		                         if (comment_busy || !kamtape_logged_in()) {
+			                         return LIGHT1_BACK_COLOR;
+		                         }
+		                         return view.touch_darkness > 0 ? View::STANDARD_BACKGROUND(view) : (u32)BUTTON_COLOR;
+	                         })
+	                         ->set_on_view_released([](View &) { start_comment_flow(""); }),
+	                     (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL))
+	                         ->set_text((std::function<std::string()>)[]() -> std::string { return comment_status; })
+	                         ->set_x_alignment(TextView::XAlign::CENTER)
+	                         ->set_get_text_color([]() { return LIGHT1_TEXT_COLOR; }),
+	                     (new EmptyView(0, 0, 320, SMALL_MARGIN))});
 	comment_tab_view = (new ScrollView(0, 0, 320, CONTENT_Y_HIGH))
 	                       ->set_views({comments_top_view, comments_main_view, comments_bottom_view});
 
@@ -866,6 +934,7 @@ debug_info_view =
 	            ->set_has_more_replies(
 	                [comment_index]() { return cur_video_info.comments[comment_index].has_more_replies(); })
 	            ->set_on_author_icon_pressed([author_id](const PostView &view) { channel_id_pressed = author_id; })
+	            ->set_on_reply_pressed([comment_id = comment.id](const PostView &) { start_comment_flow(comment_id); })
 	            ->set_on_load_more_replies_pressed([comment_index](PostView &view) {
 		            queue_async_task(load_more_replies, (void *)comment_index);
 		            view.is_loading_replies = true;

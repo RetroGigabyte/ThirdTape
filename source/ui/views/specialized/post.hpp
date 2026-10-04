@@ -53,6 +53,8 @@ struct PostView : public FixedWidthView {
 	void draw_content_line_with_timestamps(size_t line_index, float x, float y) const;
 	void handle_timestamp_touch(Hid_info key, size_t line_index, float line_x, float line_y);
 	void draw_vote_column(float x, float y) const;
+	bool reply_link_visible() const;
+	float reply_link_x() const;
 
 	// position-related functions
 	inline float get_icon_size() const {
@@ -95,6 +97,8 @@ struct PostView : public FixedWidthView {
 
 	std::function<bool()> get_has_more_replies;
 	CallBackFuncType on_author_icon_pressed_func;
+	CallBackFuncType on_reply_pressed_func; // shows a "Reply" link in the header (only while logged in)
+	bool reply_holding = false;
 	CallBackFuncTypeModifiable on_load_more_replies_pressed_func;
 
 	int author_icon_handle = -1;
@@ -128,6 +132,7 @@ struct PostView : public FixedWidthView {
 	}
 	void reset_holding_status_() override {
 		icon_holding = false;
+		reply_holding = false;
 		show_more_holding = false;
 		hide_replies_holding = false;
 		show_more_replies_holding = false;
@@ -217,6 +222,10 @@ struct PostView : public FixedWidthView {
 	}
 	PostView *set_on_author_icon_pressed(CallBackFuncType on_author_icon_pressed_func) {
 		this->on_author_icon_pressed_func = on_author_icon_pressed_func;
+		return this;
+	}
+	PostView *set_on_reply_pressed(CallBackFuncType on_reply_pressed_func) {
+		this->on_reply_pressed_func = on_reply_pressed_func;
 		return this;
 	}
 	PostView *set_on_load_more_replies_pressed(CallBackFuncTypeModifiable on_load_more_replies_pressed_func) {

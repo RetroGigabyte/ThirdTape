@@ -277,6 +277,40 @@ std::string kamtape_login(const std::string &user, const std::string &pass) {
 	return "";
 }
 
+
+// Posting: POST /comment_servlet (the form the site's own script builds). The answer is "<CODE> <form id>".
+std::string kamtape_post_comment(const std::string &video_id, const std::string &parent_id, const std::string &text) {
+	if (!kamtape_logged_in()) return "Please log in first (Settings).";
+	if (video_id.empty()) return "No video.";
+	std::string t = trim_ws(text);
+	if (t.empty()) return "Write something first.";
+	size_t chars = 0;
+	for (unsigned char c : t) chars += (c & 0xC0) != 0x80;
+	if (chars > 500) return "Comments are limited to 500 characters.";
+
+	std::string form_id = parent_id.empty() ? "comment_formmain_comment2" : "comment_formcomment_form_id_" + parent_id;
+	std::string body = "video_id=" + url_encode(video_id) + "&add_comment=&form_id=" + url_encode(form_id) +
+	                   "&reply_parent_id=" + url_encode(parent_id) + "&comment_type=V&comment=" + url_encode(t);
+	std::map<std::string, std::string> headers = {{"Content-Type", "application/x-www-form-urlencoded"},
+	                                              {"Referer", kamtape_video_url(video_id)},
+	                                              {"X-Requested-With", "XMLHttpRequest"}};
+	auto res = thread_network_session_list.perform(HttpRequest::POST(std::string(KT_HOST) + "/comment_servlet", headers, body));
+	if (res.fail) return "Couldn't reach Kamtape.";
+	std::string answer(res.data.begin(), res.data.end());
+	std::string code = answer.substr(0, answer.find(' '));
+	code = trim_ws(code);
+	if (code == "OK") return "";
+	if (code == "PENDING") return "Posted: waiting for approval.";
+	if (code == "LOGIN") return "Your login has expired. Please log in again.";
+	if (code == "EMAIL") return "Confirm your email address on kamtape.com first.";
+	if (code == "BLOCKED") return "You can't comment on this video.";
+	if (code == "TOOSOON") return "Commenting limit exceeded. Try again later.";
+	if (code == "TOOLONG") return "That comment is too long (500 characters max).";
+	if (code == "TOOSHORT") return "That comment is too short.";
+	if (code == "CAPTCHAFAIL") return "Kamtape asked for a captcha, which the app can't show.";
+	return "Couldn't post the comment (" + (code.empty() ? std::string("no answer") : code.substr(0, 20)) + ").";
+}
+
 // ------------------------------------------------------------------------------------------------ profiles (scraped)
 // The API returns an empty profile text, so everything comes from https://www.kamtape.com/profile?user=<name>:
 // the picture (first image of the profile box, a 4:3 thumbnail), the bio, the labelled fields and the counters.

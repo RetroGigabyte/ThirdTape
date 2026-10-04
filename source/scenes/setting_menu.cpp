@@ -467,46 +467,6 @@ void Sem_init(void) {
 			// Tab #1 : UI/Display
 			(new ScrollView(0, 0, 320, 0))
 				->set_views({
-					// UI language
-					(new GridSelectorView(0, 0, 320, 70, false))
-						->set_texts({
-							"English",
-							"日本語",
-							"Deutsch",
-							"Français",
-							"Italiano",
-							"Español"
-						}, get_language_index(languages_ui, var_lang))
-						->set_row_counts({3, 3})
-						->set_title([](const GridSelectorView &) { return LOCALIZED(UI_LANGUAGE); })
-						->set_on_change([](const GridSelectorView &view) {
-							auto next_lang = languages_ui[view.selected_button];
-							if (var_lang != next_lang) {
-								var_lang = next_lang;
-								misc_tasks_request(TASK_RELOAD_STRING_RESOURCE);
-								misc_tasks_request(TASK_SAVE_SETTINGS);
-							}
-						}),
-					// Content language
-					(new GridSelectorView(0, 0, 320, 70, false))
-						->set_texts({
-							"English",
-							"日本語",
-							"Deutsch",
-							"Français",
-							"Italiano",
-							"Español"
-						}, get_language_index(languages_content, var_lang_content))
-						->set_row_counts({3, 3})
-						->set_title([](const GridSelectorView &) { return LOCALIZED(CONTENT_LANGUAGE); })
-						->set_on_change([](const GridSelectorView &view) {
-							auto next_lang = languages_content[view.selected_button];
-							if (var_lang_content != next_lang) {
-								var_lang_content = next_lang;
-								misc_tasks_request(TASK_SAVE_SETTINGS);
-								youtube_change_content_language(var_lang_content);
-							}
-						}),
 					// LCD Brightness
 					(new BarView(0, 0, 320, 40))
 						->set_values_sync(15, 163, &var_lcd_brightness)

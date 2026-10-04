@@ -1,4 +1,5 @@
 #include "ui/views/specialized/post.hpp"
+#include "youtube_parser/parser.hpp"
 #include "network_decoder/thumbnail_loader.hpp"
 #include "util/log.hpp"
 #include "util/timestamp_parser.hpp"
@@ -23,6 +24,9 @@ void PostView::draw_vote_column(float x, float y) const {
 	Draw_x_centered(upvote_str, x, x + w, y + 8, 0.45, 0.45, color);
 	C2D_DrawTriangle(cx - 6, y + 22, arrow, cx + 6, y + 22, arrow, cx, y + 29, arrow, 0);
 }
+bool PostView::reply_link_visible() const { return on_reply_pressed_func && !is_reply && !is_description_mode && kamtape_logged_in(); }
+float PostView::reply_link_x() const { return x1 - SMALL_MARGIN * 3 - Draw_get_width("Reply", 0.5); }
+
 void PostView::draw_() const {
 	int cur_y = y0;
 
@@ -32,6 +36,9 @@ void PostView::draw_() const {
 			Draw(author_name, x, cur_y - 3, 0.5, 0.5, LIGHT0_TEXT_COLOR);
 			x += Draw_get_width(author_name + " ", 0.5);
 			Draw(time_str, x, cur_y - 2, 0.45, 0.45, LIGHT1_TEXT_COLOR);
+			if (reply_link_visible()) {
+				Draw("Reply", reply_link_x(), cur_y - 3, 0.5, 0.5, reply_holding ? (u32)DEF_DRAW_GRAY : (u32)COLOR_LINK);
+			}
 		}
 		if (cur_y < 240 && cur_y + get_icon_size() > 0) {
 			draw_vote_column(x0 + SMALL_MARGIN, cur_y);
@@ -121,6 +128,18 @@ void PostView::update_(Hid_info key) {
 
 	if (!is_description_mode) {
 		bool inside_author_icon = false; // the left column is the (display-only) vote column
+		bool inside_reply = reply_link_visible() && key.touch_x >= reply_link_x() - 6 && key.touch_x < x1 &&
+		                    key.touch_y >= cur_y - 3 && key.touch_y < cur_y + DEFAULT_FONT_INTERVAL + 2;
+		if (key.p_touch && inside_reply) {
+			reply_holding = true;
+		}
+		if (key.touch_x == -1 && reply_holding && on_reply_pressed_func) {
+			reply_holding = false;
+			on_reply_pressed_func(*this);
+		}
+		if (!inside_reply) {
+			reply_holding = false;
+		}
 
 		if (key.p_touch && inside_author_icon) {
 			icon_holding = true;
