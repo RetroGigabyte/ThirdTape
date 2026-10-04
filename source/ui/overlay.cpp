@@ -2,6 +2,7 @@
 #include "variables.hpp"
 #include "headers.hpp"
 #include "ui/ui.hpp"
+#include "youtube_parser/parser.hpp"
 
 #define ICON_LINE_HEIGHT 3
 #define ICON_LINE_Y_MARGIN 4
@@ -14,6 +15,7 @@ struct Content {
 	std::string string;
 	enum class Type {
 		SEARCH,
+		CHANNEL,
 		HISTORY,
 		HOME,
 		EXIT,
@@ -109,6 +111,9 @@ void update_overlay_menu(Hid_info *key) {
 	if (global_current_scene != SceneType::SEARCH) {
 		contents.push_back({LOCALIZED(GOTO_SEARCH), Content::Type::SEARCH});
 	}
+	if (kamtape_logged_in()) {
+		contents.push_back({"My channel", Content::Type::CHANNEL});
+	}
 	if (global_current_scene != SceneType::HISTORY) {
 		contents.push_back({LOCALIZED(WATCH_HISTORY), Content::Type::HISTORY});
 	}
@@ -172,6 +177,9 @@ void update_overlay_menu(Hid_info *key) {
 				} else if (contents[id].type == Content::Type::HISTORY) {
 					global_intent.next_scene = SceneType::HISTORY;
 					global_intent.arg = "";
+				} else if (contents[id].type == Content::Type::CHANNEL) {
+					global_intent.next_scene = SceneType::CHANNEL;
+					global_intent.arg = kamtape_username();
 				} else if (contents[id].type == Content::Type::HOME) {
 					global_intent.next_scene = SceneType::HOME;
 					global_intent.arg = "";
