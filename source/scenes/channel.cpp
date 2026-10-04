@@ -98,6 +98,10 @@ static bool send_load_request(std::string url);
 
 // ---- commenting on a channel (needs a login): comment text -> verification picture (shown big on the top screen) ->
 // the letters -> post
+// Posting channel comments is bugged for now (the captcha step doesn't work out): the button says so. Flip this to
+// true to try the flow again.
+static const bool CHANNEL_POSTING_ENABLED = false;
+
 enum { CC_IDLE, CC_FETCHING, CC_ENTER_CODE, CC_POSTING };
 static volatile int cc_state = CC_IDLE;
 static std::string cc_text, cc_user, cc_status;
@@ -128,6 +132,11 @@ static void cc_post_task(void *arg) {
 }
 static void cc_start() {
 	if (cc_state != CC_IDLE) {
+		return;
+	}
+	if (!CHANNEL_POSTING_ENABLED) {
+		cc_status = "Posting on channels is bugged for now. Sorry!";
+		var_need_refresh = true;
 		return;
 	}
 	if (!kamtape_logged_in()) {
@@ -356,13 +365,16 @@ void Channel_init(void) {
                      ->set_views({(new EmptyView(0, 0, 320, SMALL_MARGIN)),
                                   (new TextView(SMALL_MARGIN * 2, 0, 320 - SMALL_MARGIN * 4, 20))
                                       ->set_text((std::function<std::string()>)[]() -> std::string {
+	                                      if (!CHANNEL_POSTING_ENABLED) {
+		                                      return "Posting is bugged (for now)";
+	                                      }
 	                                      return kamtape_logged_in() ? "Write a comment" : "Log in (Settings) to comment";
                                       })
                                       ->set_x_alignment(TextView::XAlign::CENTER)
                                       ->set_text_offset(0, 1)
                                       ->set_rounded(true)
                                       ->set_get_background_color([](const View &view) -> u32 {
-	                                      if (cc_state != CC_IDLE || !kamtape_logged_in()) {
+	                                      if (!CHANNEL_POSTING_ENABLED || cc_state != CC_IDLE || !kamtape_logged_in()) {
 		                                      return LIGHT1_BACK_COLOR;
 	                                      }
 	                                      return view.touch_darkness > 0 ? View::STANDARD_BACKGROUND(view) : (u32)BUTTON_COLOR;
