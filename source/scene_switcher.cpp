@@ -285,7 +285,10 @@ bool Menu_main(void) {
 				fclose(f);
 				std::string url(buf, n);
 				while (!url.empty() && (url.back() == '\n' || url.back() == '\r' || url.back() == ' ')) url.pop_back();
-				if (!url.empty()) {
+				if (url.compare(0, 5, "user:") == 0) { // "user:<name>" opens a user (channel) page
+					global_intent.next_scene = SceneType::CHANNEL;
+					global_intent.arg = url.substr(5);
+				} else if (!url.empty()) {
 					global_intent.next_scene = SceneType::VIDEO_PLAYER;
 					global_intent.arg = url;
 				}

@@ -51,6 +51,9 @@ ScrollView *main_view = new ScrollView(0, 0, 320, VIDEO_LIST_Y_HIGH);
 ImageView *banner_view;
 ChannelView *channel_view;
 Tab2View *tab_view;
+// the Live and Shorts tabs were removed (Kamtape has neither), but the loading code still updates their sort bars:
+// keep them as hidden stand-ins that are never shown
+static VerticalListView *hidden_streams_tab_view = NULL, *hidden_shorts_tab_view = NULL;
 SelectorView *video_sort_selector;
 SelectorView *streams_sort_selector;
 SelectorView *shorts_sort_selector;
@@ -207,6 +210,14 @@ void Channel_init(void) {
 	        }
         });
     info_view = (new VerticalListView(0, 0, 320));
+    hidden_streams_tab_view =
+        (new VerticalListView(0, 0, 320))
+            ->set_views({(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({streams_sort_selector}),
+                         (new RuleView(0, 0, 320, 2)), stream_list_view, stream_load_more_view});
+    hidden_shorts_tab_view =
+        (new VerticalListView(0, 0, 320))
+            ->set_views({(new HorizontalListView(0, 0, MIDDLE_FONT_INTERVAL))->set_views({shorts_sort_selector}),
+                         (new RuleView(0, 0, 320, 2)), shorts_list_view, shorts_load_more_view});
     tab_view =
         (new Tab2View(0, 0, 320))
             ->set_tab_font_size(0.4)
@@ -237,6 +248,12 @@ void Channel_init(void) {
 	    banner_view = NULL;
 	    delete channel_view;
 	    channel_view = NULL;
+	    hidden_streams_tab_view->recursive_delete_subviews();
+	    delete hidden_streams_tab_view;
+	    hidden_streams_tab_view = NULL;
+	    hidden_shorts_tab_view->recursive_delete_subviews();
+	    delete hidden_shorts_tab_view;
+	    hidden_shorts_tab_view = NULL;
 	    tab_view->recursive_delete_subviews();
 	    delete tab_view;
 	    tab_view = NULL;
@@ -571,7 +588,7 @@ void Channel_init(void) {
 		    });
 	    }
 
-	    auto streams_tab_view = dynamic_cast<VerticalListView *>(tab_view->views[1]);
+	    auto streams_tab_view = hidden_streams_tab_view;
 	    if (!channel_info.streams_sort_token_newest.empty() || !channel_info.streams_sort_token_popular.empty() ||
 	        !channel_info.streams_sort_token_oldest.empty()) {
 		    dynamic_cast<HorizontalListView *>(streams_tab_view->views[0])->update_y_range(0, MIDDLE_FONT_INTERVAL);
@@ -612,7 +629,7 @@ void Channel_init(void) {
 		    });
 	    }
 
-	    auto shorts_tab_view = dynamic_cast<VerticalListView *>(tab_view->views[2]);
+	    auto shorts_tab_view = hidden_shorts_tab_view;
 	    if (!channel_info.shorts_sort_token_newest.empty() || !channel_info.shorts_sort_token_popular.empty() ||
 	        !channel_info.shorts_sort_token_oldest.empty()) {
 		    dynamic_cast<HorizontalListView *>(shorts_tab_view->views[0])->update_y_range(0, MIDDLE_FONT_INTERVAL);
@@ -627,10 +644,10 @@ void Channel_init(void) {
 	    }
 
 	    // playlist list
-	    tab_view->views[3]->recursive_delete_subviews();
-	    delete tab_view->views[3];
+	    tab_view->views[1]->recursive_delete_subviews();
+	    delete tab_view->views[1];
 	    if (result.has_playlists_to_load()) {
-		    tab_view->views[3] = (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL * 2))
+		    tab_view->views[1] = (new TextView(0, 0, 320, DEFAULT_FONT_INTERVAL * 2))
 		                             ->set_text((std::function<std::string()>)[]() {
 			                             return channel_info.error != "" ? channel_info.error : LOCALIZED(LOADING);
 		                             })
@@ -644,7 +661,7 @@ void Channel_init(void) {
 			                             }
 		                             });
 	    } else {
-		    tab_view->views[3] = new_playlist_view; // possible if the channel info is loaded from cache
+		    tab_view->views[1] = new_playlist_view; // possible if the channel info is loaded from cache
 	    }
 	    // community post
 	    for (auto view : community_thumbnail_loaded_list) {
@@ -756,7 +773,7 @@ void Channel_init(void) {
 		    stream_load_more_view->set_is_visible(false);
 	    }
 
-	    auto streams_tab_view = dynamic_cast<VerticalListView *>(tab_view->views[1]);
+	    auto streams_tab_view = hidden_streams_tab_view;
 	    if (!channel_info.streams_sort_token_newest.empty() || !channel_info.streams_sort_token_popular.empty() ||
 	        !channel_info.streams_sort_token_oldest.empty()) {
 		    dynamic_cast<HorizontalListView *>(streams_tab_view->views[0])->update_y_range(0, MIDDLE_FONT_INTERVAL);
@@ -858,7 +875,7 @@ void Channel_init(void) {
 		    shorts_load_more_view->set_is_visible(false);
 	    }
 
-	    auto shorts_tab_view = dynamic_cast<VerticalListView *>(tab_view->views[2]);
+	    auto shorts_tab_view = hidden_shorts_tab_view;
 	    if (!channel_info.shorts_sort_token_newest.empty() || !channel_info.shorts_sort_token_popular.empty() ||
 	        !channel_info.shorts_sort_token_oldest.empty()) {
 		    dynamic_cast<HorizontalListView *>(shorts_tab_view->views[0])->update_y_range(0, MIDDLE_FONT_INTERVAL);
@@ -927,9 +944,9 @@ void Channel_init(void) {
 		    channel_info_cache[channel_info.url_original] = channel_info;
 	    }
 
-	    tab_view->views[3]->recursive_delete_subviews();
-	    delete tab_view->views[3];
-	    tab_view->views[3] = playlist_tab_view;
+	    tab_view->views[1]->recursive_delete_subviews();
+	    delete tab_view->views[1];
+	    tab_view->views[1] = playlist_tab_view;
 
 	    var_need_refresh = true;
 	    resource_lock.unlock();
