@@ -1,7 +1,5 @@
-> **AI Disclaimer:** This project was developed with the assistance of Claude AI. I believe AI-written code should be open source to benefit everyone and maintain transparency.
-
 # ThirdTape
-
+> **AI Disclaimer:** This project was developed with the assistance of Claude AI. I believe AI-written code should be open source to benefit everyone and maintain transparency.
 A homebrew [Kamtape](https://www.kamtape.com) client for the Nintendo 3DS.
 
 > **Status: work in progress.** This repository currently contains an unmodified snapshot of
