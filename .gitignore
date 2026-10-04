@@ -4,3 +4,4 @@ build/
 *.smdh
 *.cia
 .DS_Store
+tools/bin/

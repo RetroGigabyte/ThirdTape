@@ -28,10 +28,12 @@ std::string youtube_get_playlist_id_by_url(const std::string &url) {
 	return "";
 }
 std::string youtube_get_video_thumbnail_url_by_id(const std::string &id) {
-	return "https://i.ytimg.com/vi/" + id + "/default.jpg";
+	return "https://www.kamtape.com/get_still?video_id=" + id;
 }
-std::string youtube_get_video_url_by_id(const std::string &id) { return "https://m.youtube.com/watch?v=" + id; }
+std::string youtube_get_video_url_by_id(const std::string &id) { return "https://www.kamtape.com/watch?v=" + id; }
 std::string get_video_id_from_thumbnail_url(const std::string &url) {
+	auto kp = url.find("get_still?video_id=");
+	if (kp != std::string::npos) return url.substr(kp + 19, 11);
 	auto pos = url.find("i.ytimg.com/vi/");
 	if (pos == std::string::npos) {
 		// Check for webp format
@@ -61,7 +63,7 @@ bool youtube_is_valid_video_id(const std::string &id) {
 	return true;
 }
 bool is_youtube_url(const std::string &url) {
-	std::vector<std::string> patterns = {"https://m.youtube.com/", "https://www.youtube.com/"};
+	std::vector<std::string> patterns = {"https://www.kamtape.com/", "https://m.kamtape.com/", "https://kamtape.com/"};
 	for (auto pattern : patterns) {
 		if (starts_with(url, pattern, 0)) {
 			return true;
@@ -70,8 +72,7 @@ bool is_youtube_url(const std::string &url) {
 	return false;
 }
 bool is_youtube_thumbnail_url(const std::string &url) {
-	std::vector<std::string> patterns = {"https://i.ytimg.com/vi/", "https://yt3.ggpht.com/",
-	                                     "https://yt3.googleusercontent.com/"};
+	std::vector<std::string> patterns = {"https://www.kamtape.com/get_still", "https://v", "https://static"};
 	for (auto pattern : patterns) {
 		if (starts_with(url, pattern, 0)) {
 			return true;
@@ -80,25 +81,9 @@ bool is_youtube_thumbnail_url(const std::string &url) {
 	return false;
 }
 YouTubePageType youtube_get_page_type(std::string url) {
-	url = convert_url_to_mobile(url);
-	if (starts_with(url, "https://m.youtube.com/watch?", 0)) {
-		return YouTubePageType::VIDEO;
-	}
-	if (starts_with(url, "https://m.youtube.com/user/", 0)) {
-		return YouTubePageType::CHANNEL;
-	}
-	if (starts_with(url, "https://m.youtube.com/channel/", 0)) {
-		return YouTubePageType::CHANNEL;
-	}
-	if (starts_with(url, "https://m.youtube.com/c/", 0)) {
-		return YouTubePageType::CHANNEL;
-	}
-	if (starts_with(url, "https://m.youtube.com/@", 0)) {
-		return YouTubePageType::CHANNEL;
-	}
-	if (starts_with(url, "https://m.youtube.com/results?", 0)) {
-		return YouTubePageType::SEARCH;
-	}
+	if (url.find("kamtape.com/watch?") != std::string::npos) return YouTubePageType::VIDEO;
+	if (url.find("kamtape.com/user/") != std::string::npos) return YouTubePageType::CHANNEL;
+	if (url.find("kamtape.com/results?") != std::string::npos) return YouTubePageType::SEARCH;
 	return YouTubePageType::INVALID;
 }
 int64_t extract_stream_length(const std::string &url) {

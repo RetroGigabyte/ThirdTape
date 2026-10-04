@@ -52,11 +52,11 @@ GFXBUILD	:=	$(ROMFS)/gfx
 TIME := $(shell date +"%Y-%m-%d %H:%M:%S %Z")
 #---------------------------------------------------------------------------------
 APP_VER					:= 84
-APP_TITLE				:= FourthTube
-APP_DESCRIPTION				:= A YouTube Client For The 3DS
-APP_AUTHOR				:= The FourthTube Community
-PRODUCT_CODE				:= CTR-TYT
-UNIQUE_ID				:= 0xBF74D
+APP_TITLE				:= ThirdTape
+APP_DESCRIPTION				:= A Kamtape Client For The 3DS
+APP_AUTHOR				:= RetroGigabyte
+PRODUCT_CODE				:= CTR-TTAPE
+UNIQUE_ID				:= 0xB7D10
 
 BANNER_AUDIO				:= resource/banner.wav
 BANNER_IMAGE				:= resource/banner.cgfx

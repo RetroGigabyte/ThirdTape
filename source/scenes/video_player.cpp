@@ -1422,7 +1422,7 @@ debug_info_view =
 
     auto is_available = [&](int p_value) {
 	    return tmp_video_info.video_stream_urls.count(p_value) ||
-	           ((p_value == 360 || p_value == 480) && tmp_video_info.both_stream_url != "");
+	           (tmp_video_info.both_stream_url != "");   // Kamtape: one MP4 stream serves every quality setting
     };
     if (var_video_quality == 0) {
 	    audio_only_mode = true;
@@ -2077,7 +2077,7 @@ debug_info_view =
 				        playing_video_info.is_livestream ? playing_video_info.stream_fragment_len : -1,
 				        playing_video_info.needs_timestamp_adjusting(),
 				        var_is_new3ds && (video_p_value == 360 || video_p_value == 480));
-			    } else if ((video_p_value == 360 || video_p_value == 480) && playing_video_info.both_stream_url != "") {
+			    } else if (playing_video_info.both_stream_url != "") {
 				    // itag 18 (both_stream) of a long video takes too much time and sometimes leads to a crash
 				    result = network_decoder.init(
 				        playing_video_info.both_stream_url, stream_downloader,
