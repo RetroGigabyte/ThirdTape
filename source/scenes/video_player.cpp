@@ -1408,6 +1408,10 @@ debug_info_view =
 	    for (auto &i : tmp_video_info.video_stream_urls) {
 		    available_qualities.push_back(i.first);
 	    }
+	    // Kamtape serves one MP4 that contains both audio and video: offer it as the (only) quality
+	    if (tmp_video_info.both_stream_url != "" && !tmp_video_info.video_stream_urls.count(360)) {
+		    available_qualities.push_back(360);
+	    }
 
 	    video_quality_selector_view->button_texts = {(std::function<std::string()>)[](){return LOCALIZED(OFF);
     }
@@ -2069,7 +2073,8 @@ debug_info_view =
 				        playing_video_info.audio_stream_url, stream_downloader,
 				        playing_video_info.is_livestream ? playing_video_info.stream_fragment_len : -1,
 				        playing_video_info.needs_timestamp_adjusting(), var_is_new3ds);
-			    } else if (playing_video_info.video_stream_urls[(int)video_p_value] != "" &&
+			    } else if (playing_video_info.both_stream_url == "" &&
+			               playing_video_info.video_stream_urls[(int)video_p_value] != "" &&
 			               playing_video_info.audio_stream_url != "") {
 				    result = network_decoder.init(
 				        playing_video_info.video_stream_urls[(int)video_p_value], playing_video_info.audio_stream_url,

@@ -215,6 +215,7 @@ YouTubeVideoDetail youtube_load_video_page(std::string url) {
 	}
 	res.succinct_thumbnail_url = kamtape_thumbnail_url(id);
 	res.both_stream_url = kamtape_stream_url(id);
+	res.audio_stream_url = res.both_stream_url; // audio-only mode plays the same file
 	res.playability_status = "OK";
 
 	// comments
